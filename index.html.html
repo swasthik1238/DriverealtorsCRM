@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RE Lead CRM</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --brand: #185FA5;
+    --brand-light: #E6F1FB;
+    --success-bg: #E8F5E9; --success-text: #1B5E20;
+    --warn-bg: #FFF3E0;    --warn-text: #E65100;
+    --danger-bg: #FFEBEE;  --danger-text: #B71C1C;
+    --neutral-bg: #ECEFF1; --neutral-text: #455A64;
+    --purple-bg: #EDE7F6;  --purple-text: #4527A0;
+    --violet-bg: #F3E5F5;  --violet-text: #6A1B9A;
+    --gray: #F5F5F5; --border: #e0e0e0;
+    --text: #1a1a1a; --muted: #666; --hint: #999;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         font-size: 14px; color: var(--text); background: #f0f2f5; }
+
+  /* ── Layout ── */
+  .app { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; }
+  .sidebar { background: #fff; border-right: 1px solid var(--border);
+             padding: 1rem 0; display: flex; flex-direction: column; }
+  .sidebar-logo { padding: 0 1rem 1rem; font-size: 16px; font-weight: 600;
+                  border-bottom: 1px solid var(--border); margin-bottom: 0.5rem; }
+  .nav-item { padding: 9px 1rem; font-size: 13px; color: var(--muted); cursor: pointer;
+              display: flex; align-items: center; gap: 9px; border-left: 2px solid transparent;
+              transition: background 0.12s; }
+  .nav-item.active { color: var(--brand); border-left-color: var(--brand); background: var(--brand-light); }
+  .nav-item:hover:not(.active) { background: #f5f5f5; }
+  .user-area { margin-top: auto; padding: 1rem; border-top: 1px solid var(--border);
+               font-size: 12px; color: var(--muted); }
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { background: #fff; border-bottom: 1px solid var(--border); padding: 12px 1.5rem;
+            display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .topbar-title { font-size: 15px; font-weight: 600; flex-shrink: 0; }
+  .content { padding: 1.5rem; flex: 1; overflow-y: auto; }
+
+  /* ── Forms ── */
+  input, select, textarea {
+    font-size: 13px; width: 100%; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: #fff; color: var(--text); outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--brand); }
+  textarea { resize: vertical; min-height: 70px; }
+  .form-row { margin-bottom: 12px; }
+  .form-row label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  .form-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* ── Buttons ── */
+  button { font-size: 13px; cursor: pointer; border-radius: var(--radius); padding: 8px 16px;
+           border: 1px solid var(--border); background: #fff; color: var(--text);
+           transition: background 0.12s, opacity 0.12s; }
+  button:hover { background: #f5f5f5; }
+  button:active { transform: scale(0.98); }
+  .btn-primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+  .btn-primary:hover { opacity: 0.88; background: var(--brand); }
+  .btn-danger { color: #B71C1C; border-color: #f09595; }
+  .btn-danger:hover { background: var(--danger-bg); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Cards ── */
+  .card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg);
+          padding: 1rem 1.25rem; margin-bottom: 1rem; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-weight: 500; font-size: 12px; color: var(--muted); padding: 8px 10px;
+       border-bottom: 1px solid var(--border); white-space: nowrap; background: #fafafa; }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.clickable:hover td { background: #f9f9f9; cursor: pointer; }
+
+  /* ── Misc ── */
+  .badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 500; white-space: nowrap; display: inline-block; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--brand-light); color: var(--brand);
+            display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .metric { background: #f9f9f9; border-radius: var(--radius); padding: 1rem; text-align: center; border: 1px solid var(--border); }
+  .metric-val { font-size: 26px; font-weight: 600; line-height: 1.2; }
+  .metric-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.25rem; }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+                   letter-spacing: 0.05em; margin: 1rem 0 8px; }
+  .empty { text-align: center; padding: 2.5rem; color: var(--hint); font-size: 13px; }
+  .log-entry { border-left: 2px solid var(--border); padding-left: 10px; margin-bottom: 10px; }
+  .visit-card { background: #f9f9f9; border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
+  .filter-row { display: flex; gap: 8px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .filter-row select { width: auto; font-size: 12px; padding: 6px 8px; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+  .tab { padding: 8px 14px; font-size: 13px; cursor: pointer; color: var(--muted);
+         border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active-tab { color: var(--brand); border-bottom-color: var(--brand); }
+  .stage-chip { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;
+                cursor: pointer; border: 1px solid transparent; }
+  .stage-chip.active-stage { border-color: var(--brand); }
+
+  /* ── Login ── */
+  #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f0f2f5; }
+  .login-card { background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--border);
+                padding: 2rem; width: 360px; }
+  .login-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .login-card p { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; }
+  .login-error { color: #B71C1C; font-size: 13px; margin-top: 8px; display: none; }
+
+  /* ── Side Panel ── */
+  .panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 100;
+                   display: flex; align-items: flex-start; justify-content: flex-end; }
+  .panel { background: #fff; width: 440px; height: 100vh; overflow-y: auto; padding: 1.25rem;
+           border-left: 1px solid var(--border); }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+
+  /* ── Toast ── */
+  .toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 999; display: flex;
+                     flex-direction: column; gap: 8px; max-width: 300px; }
+  .toast { background: #1a1a1a; color: #fff; padding: 10px 16px; border-radius: var(--radius);
+           font-size: 13px; animation: slideIn 0.2s ease; }
+  .toast.success { background: #1B5E20; }
+  .toast.error   { background: #B71C1C; }
+  @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* ── Modal ── */
+  .modal-wrap { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200;
+                display: flex; align-items: center; justify-content: center; }
+  .modal { background: #fff; border-radius: var(--radius-lg); padding: 1.5rem; width: 380px;
+           border: 1px solid var(--border); }
+
+  /* ── Import ── */
+  .drop-zone { border: 2px dashed var(--border); border-radius: var(--radius-lg); padding: 2.5rem 1.5rem;
+               text-align: center; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+  .drop-zone:hover, .drop-zone.drag-over { background: var(--brand-light); border-color: var(--brand); }
+  .step-bar { display: flex; align-items: center; margin-bottom: 1.5rem; }
+  .step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--hint); }
+  .step.active { color: var(--brand); font-weight: 600; }
+  .step.done { color: #1B5E20; }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid currentColor;
+              display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+  .step-line { flex: 1; height: 1px; background: var(--border); margin: 0 8px; }
+  .preview-wrap { overflow-x: auto; max-height: 320px; overflow-y: auto;
+                  border: 1px solid var(--border); border-radius: var(--radius); }
+  .preview-wrap table { min-width: 700px; }
+  .row-valid td:first-child { border-left: 3px solid #639922; }
+  .row-dup   td:first-child { border-left: 3px solid #BA7517; }
+  .row-err   td:first-child { border-left: 3px solid #E24B4A; }
+  .import-sum { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .import-sum-card { flex: 1; min-width: 90px; padding: 10px; border-radius: var(--radius); text-align: center; }
+  .col-map-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .col-map-row label { min-width: 130px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .col-map-row select { flex: 1; font-size: 13px; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #ccc;
+             border-top-color: var(--brand); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <h2><span style="color:var(--brand)">RE</span>Lead CRM</h2>
+    <p>Sign in to access your leads</p>
+    <div class="form-row"><label>Email</label><input type="email" id="login-email" placeholder="agent@yourteam.com"></div>
+    <div class="form-row"><label>Password</label><input type="password" id="login-password" placeholder="••••••••"></div>
+    <button class="btn-primary" style="width:100%" onclick="doLogin()" id="login-btn">Sign in</button>
+    <div class="login-error" id="login-error"></div>
+    <div style="margin-top:1rem;text-align:center">
+      <span style="font-size:12px;color:var(--muted)">No account? </span>
+      <button class="btn-sm" style="border:none;color:var(--brand);background:none;padding:0" onclick="doSignup()">Create one</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MAIN APP (hidden until logged in)
+══════════════════════════════════════════════ -->
+<div id="app-root" style="display:none">
+  <div class="app">
+    <div class="sidebar">
+      <div class="sidebar-logo"><span style="color:var(--brand)">RE</span>Lead CRM</div>
+      <div class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" onclick="nav('leads')" id="nav-leads">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2 13c0-3 2.686-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Leads <span id="nav-badge" class="badge" style="margin-left:auto;background:var(--brand-light);color:var(--brand)"></span>
+      </div>
+      <div class="nav-item" onclick="nav('pipeline')" id="nav-pipeline">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 8h10M1 13h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Pipeline
+      </div>
+      <div class="nav-item" onclick="nav('newlead')" id="nav-newlead">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v6M5 8h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Add lead
+      </div>
+      <div class="nav-item" onclick="nav('import')" id="nav-import">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Import Excel
+      </div>
+      <div class="user-area">
+        <div id="user-email" style="margin-bottom:6px;font-weight:500;color:var(--text)"></div>
+        <button class="btn-sm" onclick="doLogout()" style="width:100%">Sign out</button>
+      </div>
+    </div>
+    <div class="main" id="main-content"></div>
+  </div>
+</div>
+
+<!-- Panel, modal, toasts -->
+<div id="panel-mount"></div>
+<div id="modal-mount"></div>
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// 🔧 CONFIGURATION — replace with your Supabase project values
+// Get these from: Supabase Dashboard > Settings > API
+// ══════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://glrpgxjxvaqalwjkpnia.supabase.co
+';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdscnBneGp4dmFxYWx3amtwbmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3OTEwNDQsImV4cCI6MjA5MTM2NzA0NH0.eeELDUvZ5HQiTTlpKx8iGdKF_DjApAotrO3rO4Anz5Q';
+// ══════════════════════════════════════════════════════════════
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── Constants ──
+const STAGES = ['New Lead','Contacted','Prospect','Site Visit Scheduled','Site Visit Completed','Disqualified','Closed Won','Closed Lost'];
+const STAGE_COLORS = {
+  'New Lead':              ['#E6F1FB','#185FA5'],
+  'Contacted':             ['#EDE7F6','#4527A0'],
+  'Prospect':              ['#E8F5E9','#1B5E20'],
+  'Site Visit Scheduled':  ['#FFF3E0','#E65100'],
+  'Site Visit Completed':  ['#F3E5F5','#6A1B9A'],
+  'Disqualified':          ['#FFEBEE','#B71C1C'],
+  'Closed Won':            ['#E8F5E9','#1B5E20'],
+  'Closed Lost':           ['#ECEFF1','#455A64'],
+};
+const SOURCES    = ['Website','Referral','Walk-in','Social Media','Property Portal','Cold Call','Event','Other'];
+const PROP_TYPES = ['Apartment','Villa','Plot','Row-house','Penthouse'];
+const DQ_REASONS = ['Budget Mismatch','Timeline Too Far','Not Interested','Unreachable','Chose Competitor','Duplicate Record','Other'];
+const CRM_FIELDS = [
+  {key:'name',     label:'Name',          required:true},
+  {key:'phone',    label:'Phone',         required:true},
+  {key:'email',    label:'Email',         required:false},
+  {key:'propType', label:'Property Type', required:false},
+  {key:'budgetMin',label:'Budget Min',    required:false},
+  {key:'budgetMax',label:'Budget Max',    required:false},
+  {key:'source',   label:'Source',        required:false},
+  {key:'status',   label:'Status',        required:false},
+  {key:'notes',    label:'Notes',         required:false},
+];
+
+// ── App state ──
+let currentUser  = null;
+let leads        = [];
+let currentView  = 'dashboard';
+let selectedLead = null;
+let panelTab     = 'info';
+let panelLogs    = [];
+let panelVisits  = [];
+let filterStatus = '';
+let filterSource = '';
+let searchQ      = '';
+let importStep   = 0;
+let importHeaders= [];
+let importRawRows= [];
+let importColMap = {};
+let importPreview= [];
+
+// ── Helpers ──
+function fmt(n){ if(!n) return '—'; return '₹'+Math.round(n/100000)+'L'; }
+function initials(n){ return n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+function today(){ return new Date().toISOString().slice(0,10); }
+function daysSince(d){ if(!d) return null; return Math.round((Date.now()-new Date(d))/86400000); }
+function stageBadge(s){
+  const [bg,tc] = STAGE_COLORS[s]||['#eee','#333'];
+  return `<span class="badge" style="background:${bg};color:${tc}">${s}</span>`;
+}
+function toast(msg, type=''){
+  const c = document.getElementById('toasts');
+  const d = document.createElement('div');
+  d.className = 'toast' + (type ? ' '+type : '');
+  d.textContent = msg;
+  c.appendChild(d);
+  setTimeout(()=>d.remove(), 3000);
+}
+function loading(msg='Loading…'){
+  return `<div style="display:flex;align-items:center;gap:8px;padding:2rem;color:var(--muted)"><div class="spinner"></div> ${msg}</div>`;
+}
+
+// ══════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════
+async function doLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  const btn   = document.getElementById('login-btn');
+  const err   = document.getElementById('login-error');
+  btn.textContent = 'Signing in…'; btn.disabled = true; err.style.display='none';
+  const { error } = await db.auth.signInWithPassword({ email, password: pass });
+  if(error){ err.textContent = error.message; err.style.display='block'; btn.textContent='Sign in'; btn.disabled=false; }
+}
+
+async function doSignup(){
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  if(!email||!pass){ document.getElementById('login-error').textContent='Enter email and password first.'; document.getElementById('login-error').style.display='block'; return; }
+  const { error } = await db.auth.signUp({ email, password: pass });
+  if(error){ document.getElementById('login-error').textContent = error.message; document.getElementById('login-error').style.display='block'; }
+  else { document.getElementById('login-error').style.display='none'; toast('Account created! Check email to confirm, then sign in.','success'); }
+}
+
+async function doLogout(){
+  await db.auth.signOut();
+  document.getElementById('app-root').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+}
+
+db.auth.onAuthStateChange(async (event, session) => {
+  if(session?.user){
+    currentUser = session.user;
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app-root').style.display='block';
+    document.getElementById('user-email').textContent = currentUser.email;
+    await loadLeads();
+    subscribeRealtime();
+    nav('dashboard');
+  }
+});
+
+// ══════════════════════════════════════════════
+// SUPABASE DATA LAYER
+// ══════════════════════════════════════════════
+async function loadLeads(){
+  const { data, error } = await db.from('leads').select('*').order('created_at', { ascending: false });
+  if(error){ toast('Error loading leads: '+error.message,'error'); return; }
+  leads = (data||[]).map(dbToLead);
+  renderMain();
+}
+
+// Map DB snake_case → app camelCase
+function dbToLead(r){
+  return {
+    id: r.id, name: r.name, phone: r.phone, email: r.email||'',
+    propType: r.prop_type||'Apartment', budgetMin: r.budget_min||0, budgetMax: r.budget_max||0,
+    source: r.source||'Other', status: r.status||'New Lead', notes: r.notes||'',
+    dqReason: r.dq_reason||'', lastContacted: r.last_contacted||'',
+    created: (r.created_at||'').slice(0,10),
+  };
+}
+
+async function createLead(lead){
+  const { data, error } = await db.from('leads').insert([{
+    name: lead.name, phone: lead.phone, email: lead.email,
+    prop_type: lead.propType, budget_min: lead.budgetMin, budget_max: lead.budgetMax,
+    source: lead.source, status: lead.status||'New Lead', notes: lead.notes,
+    created_by: currentUser.id,
+  }]).select().single();
+  if(error) throw error;
+  return dbToLead(data);
+}
+
+async function updateLead(id, changes){
+  const dbChanges = {};
+  if(changes.name        !== undefined) dbChanges.name         = changes.name;
+  if(changes.phone       !== undefined) dbChanges.phone        = changes.phone;
+  if(changes.email       !== undefined) dbChanges.email        = changes.email;
+  if(changes.propType    !== undefined) dbChanges.prop_type    = changes.propType;
+  if(changes.budgetMin   !== undefined) dbChanges.budget_min   = changes.budgetMin;
+  if(changes.budgetMax   !== undefined) dbChanges.budget_max   = changes.budgetMax;
+  if(changes.source      !== undefined) dbChanges.source       = changes.source;
+  if(changes.status      !== undefined) dbChanges.status       = changes.status;
+  if(changes.notes       !== undefined) dbChanges.notes        = changes.notes;
+  if(changes.dqReason    !== undefined) dbChanges.dq_reason    = changes.dqReason;
+  if(changes.lastContacted !== undefined) dbChanges.last_contacted = changes.lastContacted;
+  const { error } = await db.from('leads').update(dbChanges).eq('id', id);
+  if(error) throw error;
+  const idx = leads.findIndex(l=>l.id===id);
+  if(idx>-1) leads[idx] = {...leads[idx], ...changes};
+  if(selectedLead?.id===id) selectedLead = {...selectedLead, ...changes};
+}
+
+async function loadContactLogs(leadId){
+  const { data } = await db.from('contact_logs').select('*').eq('lead_id', leadId).order('created_at',{ascending:false});
+  return (data||[]).map(r=>({ id:r.id, date:r.logged_at, method:r.method, outcome:r.outcome, note:r.note||'' }));
+}
+
+async function addContactLog(leadId, entry){
+  const { error } = await db.from('contact_logs').insert([{
+    lead_id: leadId, method: entry.method, outcome: entry.outcome,
+    note: entry.note, logged_by: currentUser.id, logged_at: today(),
+  }]);
+  if(error) throw error;
+  await updateLead(leadId, { lastContacted: today() });
+}
+
+async function loadVisits(leadId){
+  const { data } = await db.from('site_visits').select('*').eq('lead_id', leadId).order('visit_date');
+  return (data||[]).map(r=>({ id:r.id, addr:r.address, date:r.visit_date, time:r.visit_time, type:r.visit_type, status:r.status, note:r.note||'' }));
+}
+
+async function addVisit(leadId, visit){
+  const { error } = await db.from('site_visits').insert([{
+    lead_id: leadId, address: visit.addr, visit_date: visit.date,
+    visit_time: visit.time, visit_type: visit.type, status:'Scheduled',
+    created_by: currentUser.id,
+  }]);
+  if(error) throw error;
+}
+
+async function updateVisit(visitId, changes){
+  const { error } = await db.from('site_visits').update(changes).eq('id', visitId);
+  if(error) throw error;
+}
+
+// ── Realtime subscription: both users see changes instantly ──
+function subscribeRealtime(){
+  db.channel('leads-changes')
+    .on('postgres_changes', { event:'*', schema:'public', table:'leads' }, payload=>{
+      if(payload.eventType==='INSERT'){ leads.unshift(dbToLead(payload.new)); }
+      else if(payload.eventType==='UPDATE'){ const i=leads.findIndex(l=>l.id===payload.new.id); if(i>-1) leads[i]=dbToLead(payload.new); if(selectedLead?.id===payload.new.id) selectedLead=dbToLead(payload.new); }
+      else if(payload.eventType==='DELETE'){ leads=leads.filter(l=>l.id!==payload.old.id); }
+      renderMain();
+    })
+    .subscribe();
+}
+
+// ══════════════════════════════════════════════
+// NAVIGATION & RENDER
+// ══════════════════════════════════════════════
+function nav(view){
+  currentView=view; closePanel(); closeModal();
+  if(view==='import'){ importStep=0; importHeaders=[]; importRawRows=[]; importColMap={}; importPreview=[]; }
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('nav-'+view); if(el) el.classList.add('active');
+  renderMain();
+}
+
+function renderMain(){
+  const main = document.getElementById('main-content');
+  if(!main) return;
+  const active = leads.filter(l=>!['Disqualified','Closed Won','Closed Lost'].includes(l.status)).length;
+  const badge = document.getElementById('nav-badge');
+  if(badge) badge.textContent = active||'';
+  if(currentView==='dashboard') main.innerHTML = renderDashboard();
+  else if(currentView==='leads')    main.innerHTML = renderLeads();
+  else if(currentView==='pipeline') main.innerHTML = renderPipeline();
+  else if(currentView==='newlead')  main.innerHTML = renderNewLeadForm();
+  else if(currentView==='import')   main.innerHTML = renderImport();
+  if(currentView==='import') bindImportEvents();
+}
+
+// ══════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════
+function renderDashboard(){
+  const counts={};STAGES.forEach(s=>counts[s]=leads.filter(l=>l.status===s).length);
+  const overdue=leads.filter(l=>{ const d=daysSince(l.lastContacted); return d!==null&&d>7&&!['Disqualified','Closed Won','Closed Lost'].includes(l.status); });
+  const pipeline=['New Lead','Contacted','Prospect','Site Visit Scheduled','Site Visit Completed'].map(s=>{
+    const[bg,tc]=STAGE_COLORS[s];
+    return `<div style="flex:1;text-align:center;padding:10px 4px;background:${bg};border-radius:var(--radius)"><div style="font-size:22px;font-weight:600;color:${tc}">${counts[s]}</div><div style="font-size:11px;color:${tc};margin-top:2px">${s}</div></div>`;
+  }).join('');
+  return `<div class="topbar"><span class="topbar-title">Dashboard</span><span style="font-size:12px;color:var(--muted)">${new Date().toLocaleDateString('en-IN',{weekday:'short',year:'numeric',month:'short',day:'numeric'})}</span></div>
+  <div class="content">
+    <div class="grid4">
+      <div class="metric"><div class="metric-val">${leads.length}</div><div class="metric-lbl">Total leads</div></div>
+      <div class="metric"><div class="metric-val">${leads.filter(l=>!['Disqualified','Closed Won','Closed Lost'].includes(l.status)).length}</div><div class="metric-lbl">Active</div></div>
+      <div class="metric"><div class="metric-val" style="color:#1B5E20">${counts['Closed Won']}</div><div class="metric-lbl">Closed won</div></div>
+      <div class="metric"><div class="metric-val" style="color:#B71C1C">${overdue.length}</div><div class="metric-lbl">Overdue follow-ups</div></div>
+    </div>
+    <div class="card"><div class="section-label" style="margin-top:0">Active pipeline</div><div style="display:flex;gap:8px">${pipeline}</div></div>
+    ${overdue.length?`<div class="card"><div class="section-label" style="margin-top:0;color:#B71C1C">Overdue follow-ups (&gt;7 days)</div>${overdue.map(l=>`<div class="visit-card" style="cursor:pointer;border-left:2px solid #E24B4A;border-radius:0" onclick="openLead('${l.id}')"><span style="font-weight:500">${l.name}</span> <span style="color:var(--muted);font-size:12px">· last contact ${daysSince(l.lastContacted)} days ago</span></div>`).join('')}</div>`:''}
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
+// LEADS LIST
+// ══════════════════════════════════════════════
+function renderLeads(){
+  let filtered=leads.filter(l=>{
+    if(filterStatus&&l.status!==filterStatus) return false;
+    if(filterSource&&l.source!==filterSource) return false;
+    if(searchQ){ const q=searchQ.toLowerCase(); if(!l.name.toLowerCase().includes(q)&&!l.phone.includes(q)&&!(l.email||'').toLowerCase().includes(q)) return false; }
+    return true;
+  });
+  const rows=filtered.length ? filtered.map(l=>{
+    const ds=daysSince(l.lastContacted); const dot=ds===null?'#aaa':ds<=3?'#639922':ds<=7?'#BA7517':'#E24B4A';
+    return `<tr class="clickable" onclick="openLead('${l.id}')"><td><div style="display:flex;align-items:center;gap:8px"><div class="avatar">${initials(l.name)}</div><div><div style="font-weight:500">${l.name}</div><div style="font-size:11px;color:var(--muted)">${l.phone}</div></div></div></td><td>${l.propType||'—'}<br><span style="font-size:11px;color:var(--muted)">${fmt(l.budgetMin)}–${fmt(l.budgetMax)}</span></td><td>${l.source||'—'}</td><td>${stageBadge(l.status)}</td><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};margin-right:4px"></span>${ds!==null?ds+'d ago':'—'}</td></tr>`;
+  }).join('') : `<tr><td colspan="5" class="empty">No leads match your filters.</td></tr>`;
+  return `<div class="topbar"><span class="topbar-title">Leads</span><input placeholder="Search name, phone, email…" value="${searchQ}" oninput="searchQ=this.value;renderMain()" style="max-width:220px"><div style="margin-left:auto;display:flex;gap:8px"><button onclick="nav('import')">Import Excel</button><button class="btn-primary" onclick="nav('newlead')">+ Add lead</button></div></div>
+  <div class="content">
+    <div class="filter-row"><select onchange="filterStatus=this.value;renderMain()"><option value="">All statuses</option>${STAGES.map(s=>`<option value="${s}" ${filterStatus===s?'selected':''}>${s}</option>`).join('')}</select><select onchange="filterSource=this.value;renderMain()"><option value="">All sources</option>${SOURCES.map(s=>`<option value="${s}" ${filterSource===s?'selected':''}>${s}</option>`).join('')}</select>${(filterStatus||filterSource||searchQ)?`<button class="btn-sm" onclick="filterStatus='';filterSource='';searchQ='';renderMain()">Clear filters</button>`:''}<span style="margin-left:auto;font-size:12px;color:var(--muted)">${filtered.length} lead${filtered.length!==1?'s':''}</span></div>
+    <div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>Lead</th><th>Interest</th><th>Source</th><th>Status</th><th>Last contact</th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
+// PIPELINE
+// ══════════════════════════════════════════════
+function renderPipeline(){
+  const active=STAGES.filter(s=>!['Disqualified','Closed Won','Closed Lost'].includes(s));
+  const cols=active.map(s=>{
+    const [bg,tc]=STAGE_COLORS[s]; const sl=leads.filter(l=>l.status===s);
+    const cards=sl.map(l=>`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:6px;cursor:pointer" onclick="openLead('${l.id}')"><div style="font-weight:500;font-size:13px">${l.name}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${l.propType} ${l.budgetMin?'· '+fmt(l.budgetMin)+'–'+fmt(l.budgetMax):''}</div></div>`).join('');
+    return `<div style="min-width:160px;flex:1"><div style="background:${bg};color:${tc};padding:6px 10px;border-radius:var(--radius);margin-bottom:8px;font-size:12px;font-weight:500;display:flex;justify-content:space-between"><span>${s}</span><span>${sl.length}</span></div>${cards||`<div style="font-size:11px;color:var(--hint);padding:8px 4px">Empty</div>`}</div>`;
+  }).join('');
+  return `<div class="topbar"><span class="topbar-title">Pipeline</span></div><div class="content"><div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:1rem">${cols}</div></div>`;
+}
+
+// ══════════════════════════════════════════════
+// NEW LEAD FORM
+// ══════════════════════════════════════════════
+function renderNewLeadForm(){
+  return `<div class="topbar"><span class="topbar-title">Add new lead</span></div>
+  <div class="content"><div class="card">
+    <div class="form-group"><div class="form-row"><label>Full name *</label><input id="f-name" placeholder="Priya Sharma"></div><div class="form-row"><label>Phone *</label><input id="f-phone" placeholder="+91 98765 43210"></div></div>
+    <div class="form-row"><label>Email</label><input id="f-email" placeholder="priya@email.com"></div>
+    <div class="form-group"><div class="form-row"><label>Property interest</label><select id="f-type">${PROP_TYPES.map(p=>`<option>${p}</option>`).join('')}</select></div><div class="form-row"><label>Source</label><select id="f-source">${SOURCES.map(s=>`<option>${s}</option>`).join('')}</select></div></div>
+    <div class="form-group"><div class="form-row"><label>Budget min (₹)</label><input id="f-bmin" type="number" placeholder="5000000"></div><div class="form-row"><label>Budget max (₹)</label><input id="f-bmax" type="number" placeholder="10000000"></div></div>
+    <div class="form-row"><label>Notes</label><textarea id="f-notes" placeholder="Initial notes about this lead…"></textarea></div>
+    <div style="display:flex;gap:8px"><button class="btn-primary" onclick="saveLead()">Save lead</button><button onclick="nav('leads')">Cancel</button></div>
+  </div></div>`;
+}
+
+async function saveLead(){
+  const name=document.getElementById('f-name').value.trim();
+  const phone=document.getElementById('f-phone').value.trim();
+  if(!name||!phone){ toast('Name and phone are required.','error'); return; }
+  if(leads.find(l=>l.phone===phone)){ toast('Duplicate: phone already exists.','error'); return; }
+  try{
+    await createLead({ name, phone, email:document.getElementById('f-email').value.trim(),
+      propType:document.getElementById('f-type').value, source:document.getElementById('f-source').value,
+      budgetMin:parseInt(document.getElementById('f-bmin').value)||0, budgetMax:parseInt(document.getElementById('f-bmax').value)||0,
+      notes:document.getElementById('f-notes').value, status:'New Lead' });
+    toast('Lead saved: '+name,'success'); nav('leads');
+  } catch(e){ toast('Error saving lead: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════
+// SIDE PANEL (lead detail)
+// ══════════════════════════════════════════════
+async function openLead(id){
+  selectedLead = leads.find(l=>l.id===id);
+  if(!selectedLead) return;
+  panelTab='info'; panelLogs=[]; panelVisits=[];
+  renderPanel();
+  // Load logs + visits async
+  panelLogs   = await loadContactLogs(id);
+  panelVisits = await loadVisits(id);
+  renderPanel();
+}
+
+function closePanel(){
+  selectedLead=null;
+  document.getElementById('panel-mount').innerHTML='';
+}
+
+function renderPanel(){
+  if(!selectedLead){ document.getElementById('panel-mount').innerHTML=''; return; }
+  const l=selectedLead;
+  const ds=daysSince(l.lastContacted); const dot=ds===null?'#aaa':ds<=3?'#639922':ds<=7?'#BA7517':'#E24B4A';
+  const tabs=['info','log','visits'].map(t=>`<div class="tab ${panelTab===t?'active-tab':''}" onclick="panelTab='${t}';renderPanel()">${t==='info'?'Lead info':t==='log'?'Contact log':'Site visits'}</div>`).join('');
+  let body='';
+  if(panelTab==='info'){
+    body=`<div class="form-row"><label>Status</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${STAGES.filter(s=>!['Disqualified','Closed Won','Closed Lost'].includes(s)).map(s=>{const[bg,tc]=STAGE_COLORS[s];return`<span class="stage-chip ${l.status===s?'active-stage':''}" style="background:${l.status===s?bg:'transparent'};color:${l.status===s?tc:'var(--muted)'}" onclick="setStatus('${l.id}','${s}')">${s}</span>`;}).join('')}</div></div>
+    <div class="form-row"><label>Name</label><input value="${l.name}" onchange="patchLead('name',this.value)"></div>
+    <div class="form-row"><label>Phone</label><input value="${l.phone}" onchange="patchLead('phone',this.value)"></div>
+    <div class="form-row"><label>Email</label><input value="${l.email||''}" onchange="patchLead('email',this.value)"></div>
+    <div class="form-group">
+      <div class="form-row"><label>Property type</label><select onchange="patchLead('propType',this.value)">${PROP_TYPES.map(p=>`<option ${l.propType===p?'selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="form-row"><label>Source</label><select onchange="patchLead('source',this.value)">${SOURCES.map(s=>`<option ${l.source===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    </div>
+    <div class="form-group">
+      <div class="form-row"><label>Budget min</label><input type="number" value="${l.budgetMin}" onchange="patchLead('budgetMin',parseInt(this.value))"></div>
+      <div class="form-row"><label>Budget max</label><input type="number" value="${l.budgetMax}" onchange="patchLead('budgetMax',parseInt(this.value))"></div>
+    </div>
+    <div class="form-row"><label>Notes</label><textarea onchange="patchLead('notes',this.value)">${l.notes||''}</textarea></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      ${!['Disqualified','Closed Won','Closed Lost'].includes(l.status)?`<button class="btn-danger btn-sm" onclick="openDisqModal()">Disqualify</button><button class="btn-sm" onclick="setStatus('${l.id}','Closed Won')">Mark closed won</button>`:''}
+      ${l.status==='Disqualified'?`<button class="btn-sm" onclick="setStatus('${l.id}','New Lead')">Reactivate lead</button>`:''}
+    </div>`;
+  } else if(panelTab==='log'){
+    body=`<div class="form-row"><label>Contact method</label><select id="log-method"><option>Call</option><option>WhatsApp</option><option>Email</option><option>In-Person</option><option>SMS</option></select></div>
+    <div class="form-row"><label>Outcome</label><select id="log-outcome"><option>Reached</option><option>No Answer</option><option>Left Voicemail</option><option>Call Back Later</option><option>Not Interested</option></select></div>
+    <div class="form-row"><label>Note</label><textarea id="log-note" placeholder="What was discussed…"></textarea></div>
+    <button class="btn-primary btn-sm" onclick="doLogContact()">Log contact</button>
+    <div class="section-label">History (${panelLogs.length})</div>
+    ${panelLogs.length ? panelLogs.map(c=>`<div class="log-entry"><div style="font-weight:500">${c.method} · <span style="font-weight:400;color:var(--muted)">${c.outcome}</span></div><div style="font-size:11px;color:var(--hint)">${c.date}</div>${c.note?`<div style="margin-top:2px">${c.note}</div>`:''}</div>`).join('') : `<div class="empty">No contacts logged yet.</div>`}`;
+  } else {
+    body=`<div class="form-row"><label>Property address</label><input id="v-addr" placeholder="Prestige Towers, Whitefield"></div>
+    <div class="form-group"><div class="form-row"><label>Date</label><input type="date" id="v-date" value="${today()}"></div><div class="form-row"><label>Time</label><input type="time" id="v-time" value="10:00"></div></div>
+    <div class="form-row"><label>Visit type</label><select id="v-type"><option>In-person</option><option>Virtual</option></select></div>
+    <button class="btn-primary btn-sm" onclick="doAddVisit()">Schedule visit</button>
+    <div class="section-label">Visits (${panelVisits.length})</div>
+    ${panelVisits.length ? panelVisits.map(v=>`<div class="visit-card"><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-weight:500">${v.addr}</div>${v.status==='Scheduled'?`<button class="btn-sm btn-primary" onclick="doCompleteVisit('${v.id}')">Mark done</button>`:v.status==='Completed'?`<span class="badge" style="background:var(--success-bg);color:var(--success-text)">Completed</span>`:`<span class="badge" style="background:var(--danger-bg);color:var(--danger-text)">Cancelled</span>`}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${v.date} at ${v.time} · ${v.type}</div>${v.status==='Scheduled'?`<button class="btn-sm btn-danger" style="margin-top:6px" onclick="doCancelVisit('${v.id}')">Cancel</button>`:''}</div>`).join('') : `<div class="empty">No visits scheduled.</div>`}`;
+  }
+  document.getElementById('panel-mount').innerHTML=`<div class="panel-overlay" onclick="if(event.target.classList.contains('panel-overlay'))closePanel()"><div class="panel">
+    <div class="panel-header"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:36px;height:36px;font-size:13px">${initials(l.name)}</div><div><div style="font-weight:600;font-size:15px">${l.name}</div><div style="font-size:12px;color:var(--muted)">${l.phone}</div></div></div><div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${dot};display:inline-block"></span><button class="btn-sm" onclick="closePanel()">✕</button></div></div>
+    <div>${stageBadge(l.status)} <span style="font-size:12px;color:var(--hint)">Added ${l.created}</span></div>
+    <div class="tabs" style="margin-top:12px">${tabs}</div>
+    ${body}
+  </div></div>`;
+}
+
+async function patchLead(field, value){
+  if(!selectedLead) return;
+  try{ await updateLead(selectedLead.id, {[field]:value}); }
+  catch(e){ toast('Save error: '+e.message,'error'); }
+}
+
+async function setStatus(id, status){
+  try{
+    await updateLead(id, {status});
+    toast('Status: '+status,'success');
+    renderMain(); renderPanel();
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function doLogContact(){
+  const method = document.getElementById('log-method').value;
+  const outcome= document.getElementById('log-outcome').value;
+  const note   = document.getElementById('log-note').value;
+  try{
+    await addContactLog(selectedLead.id, {method,outcome,note});
+    panelLogs = await loadContactLogs(selectedLead.id);
+    toast('Contact logged','success'); renderMain(); renderPanel();
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function doAddVisit(){
+  const addr = document.getElementById('v-addr').value.trim();
+  if(!addr){ toast('Enter a property address.','error'); return; }
+  const date = document.getElementById('v-date').value;
+  const time = document.getElementById('v-time').value;
+  const type = document.getElementById('v-type').value;
+  try{
+    await addVisit(selectedLead.id, {addr,date,time,type});
+    if(['New Lead','Contacted','Prospect'].includes(selectedLead.status))
+      await updateLead(selectedLead.id, {status:'Site Visit Scheduled'});
+    panelVisits = await loadVisits(selectedLead.id);
+    toast('Visit scheduled','success'); renderMain(); renderPanel();
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function doCompleteVisit(visitId){
+  try{
+    await updateVisit(visitId, {status:'Completed'});
+    await updateLead(selectedLead.id, {status:'Site Visit Completed'});
+    panelVisits = await loadVisits(selectedLead.id);
+    toast('Visit completed','success'); renderMain(); renderPanel();
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function doCancelVisit(visitId){
+  try{
+    await updateVisit(visitId, {status:'Cancelled'});
+    panelVisits = await loadVisits(selectedLead.id);
+    toast('Visit cancelled'); renderPanel();
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════
+// DISQUALIFY MODAL
+// ══════════════════════════════════════════════
+function openDisqModal(){
+  document.getElementById('modal-mount').innerHTML=`<div class="modal-wrap" onclick="if(event.target.classList.contains('modal-wrap'))closeModal()"><div class="modal">
+    <div style="font-weight:600;font-size:15px;margin-bottom:4px">Disqualify lead</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:1rem">${selectedLead.name} will be removed from the active pipeline.</div>
+    <div class="form-row"><label>Reason *</label><select id="dq-reason">${DQ_REASONS.map(r=>`<option>${r}</option>`).join('')}</select></div>
+    <div class="form-row"><label>Notes</label><textarea id="dq-note" placeholder="Additional context…"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:8px"><button class="btn-danger" onclick="doDisqualify()">Confirm disqualify</button><button onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
+}
+
+function closeModal(){ document.getElementById('modal-mount').innerHTML=''; }
+
+async function doDisqualify(){
+  const reason = document.getElementById('dq-reason').value;
+  const note   = document.getElementById('dq-note').value;
+  try{
+    await updateLead(selectedLead.id, { status:'Disqualified', dqReason:reason,
+      notes: selectedLead.notes ? selectedLead.notes+'\n[DQ: '+reason+'] '+note : '[DQ: '+reason+'] '+note });
+    closeModal(); toast('Lead disqualified','success'); renderMain(); renderPanel();
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════
+// EXCEL IMPORT
+// ══════════════════════════════════════════════
+function renderImport(){
+  const steps=['Upload file','Map columns','Preview','Done'];
+  const bar=steps.map((s,i)=>`${i>0?'<div class="step-line"></div>':''}<div class="step ${importStep===i?'active':importStep>i?'done':''}"><div class="step-num">${importStep>i?'✓':i+1}</div><span>${s}</span></div>`).join('');
+  let body='';
+  if(importStep===0){
+    body=`<div class="card"><div class="section-label" style="margin-top:0">Upload your Excel or CSV file</div>
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('xlsx-input').click()">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="margin:0 auto 12px;display:block;color:var(--muted)"><path d="M16 4v16M10 14l6 6 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 22v3a1 1 0 001 1h18a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <div style="font-weight:500;margin-bottom:4px">Drop .xlsx, .xls, or .csv here</div>
+        <div style="font-size:12px;color:var(--hint)">or click to browse</div>
+      </div>
+      <input type="file" id="xlsx-input" accept=".xlsx,.xls,.csv" style="display:none">
+      <div style="margin-top:1rem"><button class="btn-sm" onclick="downloadTemplate()">Download sample template</button></div>
+    </div>`;
+  } else if(importStep===1){
+    const opts=`<option value="">— skip —</option>`+importHeaders.map(h=>`<option value="${h}">${h}</option>`).join('');
+    const rows=CRM_FIELDS.map(f=>{
+      const cur=importColMap[f.key]||'';
+      return `<div class="col-map-row"><label>${f.label}${f.required?' <span style="color:#B71C1C">*</span>':''}</label><select onchange="importColMap['${f.key}']=this.value">${opts.replace(`value="${cur}"`,`value="${cur}" selected`)}</select></div>`;
+    }).join('');
+    body=`<div class="card"><div class="section-label" style="margin-top:0">Map your columns</div><div style="font-size:13px;color:var(--muted);margin-bottom:1rem">File has <strong>${importHeaders.length}</strong> columns · <strong>${importRawRows.length}</strong> rows</div>${rows}<div style="display:flex;gap:8px;margin-top:1rem"><button class="btn-primary" onclick="runPreview()">Preview import</button><button onclick="importStep=0;renderMain()">Back</button></div></div>`;
+  } else if(importStep===2){
+    const valid=importPreview.filter(r=>r._s==='ok');
+    const dups =importPreview.filter(r=>r._s==='dup');
+    const errs =importPreview.filter(r=>r._s==='err');
+    const rows=importPreview.map((r,i)=>`<tr class="${r._s==='ok'?'row-valid':r._s==='dup'?'row-dup':'row-err'}"><td>${i+1}</td><td>${r._s==='ok'?'<span style="background:#E8F5E9;color:#1B5E20;padding:2px 7px;border-radius:20px;font-size:11px">Valid</span>':r._s==='dup'?'<span style="background:#FFF3E0;color:#E65100;padding:2px 7px;border-radius:20px;font-size:11px">Duplicate</span>':'<span style="background:#FFEBEE;color:#B71C1C;padding:2px 7px;border-radius:20px;font-size:11px">'+r._err+'</span>'}</td><td>${r.name||'—'}</td><td>${r.phone||'—'}</td><td>${r.propType||'—'}</td><td>${r.source||'—'}</td><td>${r.status||'New Lead'}</td></tr>`).join('');
+    body=`<div class="card"><div class="section-label" style="margin-top:0">Preview & confirm</div>
+      <div class="import-sum">
+        <div class="import-sum-card" style="background:#E8F5E9"><div style="font-size:20px;font-weight:600;color:#1B5E20">${valid.length}</div><div style="font-size:12px;color:#3B6D11">Ready</div></div>
+        <div class="import-sum-card" style="background:#FFF3E0"><div style="font-size:20px;font-weight:600;color:#E65100">${dups.length}</div><div style="font-size:12px;color:#854F0B">Duplicates</div></div>
+        <div class="import-sum-card" style="background:#FFEBEE"><div style="font-size:20px;font-weight:600;color:#B71C1C">${errs.length}</div><div style="font-size:12px;color:#791F1F">Errors</div></div>
+        <div class="import-sum-card" style="background:#f9f9f9"><div style="font-size:20px;font-weight:600">${importPreview.length}</div><div style="font-size:12px;color:var(--muted)">Total</div></div>
+      </div>
+      <div class="preview-wrap"><table><thead><tr><th>#</th><th>Result</th><th>Name</th><th>Phone</th><th>Prop type</th><th>Source</th><th>Stage</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="display:flex;gap:8px;margin-top:1rem;align-items:center">
+        ${valid.length?`<button class="btn-primary" onclick="confirmImport()">Import ${valid.length} lead${valid.length!==1?'s':''}</button>`:`<button class="btn-primary" disabled>No valid rows</button>`}
+        <button onclick="importStep=1;renderMain()">Back</button>
+        ${dups.length?`<span style="font-size:12px;color:var(--hint)">${dups.length} duplicate${dups.length!==1?'s':''} will be skipped</span>`:''}
+      </div>
+    </div>`;
+  } else {
+    body=`<div class="card" style="text-align:center;padding:2.5rem 1.25rem">
+      <div style="width:52px;height:52px;border-radius:50%;background:#E8F5E9;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:24px;color:#1B5E20">✓</div>
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px">Import complete!</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:1.5rem">Your leads are now live in the CRM.</div>
+      <div style="display:flex;gap:8px;justify-content:center"><button class="btn-primary" onclick="nav('leads')">View leads</button><button onclick="nav('import')">Import another</button></div>
+    </div>`;
+  }
+  return `<div class="topbar"><span class="topbar-title">Import from Excel</span></div><div class="content"><div class="step-bar">${bar}</div>${body}</div>`;
+}
+
+function bindImportEvents(){
+  const inp=document.getElementById('xlsx-input'); const dz=document.getElementById('drop-zone');
+  if(!inp||!dz) return;
+  inp.onchange=e=>handleFile(e.target.files[0]);
+  dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag-over');};
+  dz.ondragleave=()=>dz.classList.remove('drag-over');
+  dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag-over');handleFile(e.dataTransfer.files[0]);};
+}
+
+function handleFile(file){
+  if(!file) return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','csv'].includes(ext)){ toast('Please upload .xlsx, .xls, or .csv','error'); return; }
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const json=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(!json||json.length<2){ toast('File is empty or has no data rows.','error'); return; }
+      importHeaders=json[0].map(h=>String(h).trim()).filter(h=>h);
+      importRawRows=json.slice(1).filter(r=>r.some(c=>c!==''));
+      importColMap={};
+      CRM_FIELDS.forEach(f=>{
+        const auto=importHeaders.find(h=>{ const n=h.toLowerCase().replace(/[^a-z]/g,''); return n===f.key.toLowerCase()||n.includes(f.label.toLowerCase().replace(/[^a-z]/g,'')); });
+        if(auto) importColMap[f.key]=auto;
+      });
+      importStep=1; renderMain();
+    } catch(err){ toast('Could not read file.','error'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function runPreview(){
+  if(!importColMap['name']||!importColMap['phone']){ toast('Please map Name and Phone columns.','error'); return; }
+  const hidx={}; importHeaders.forEach((h,i)=>hidx[h]=i);
+  const gv=(row,key)=>{ const col=importColMap[key]; if(!col) return ''; const i=hidx[col]; return i!==undefined?String(row[i]||'').trim():''; };
+  importPreview=importRawRows.map(row=>{
+    const name=gv(row,'name'); const phone=gv(row,'phone');
+    const email=gv(row,'email'); const propType=gv(row,'propType');
+    const source=gv(row,'source'); const notes=gv(row,'notes');
+    const rawSt=gv(row,'status'); const status=STAGES.includes(rawSt)?rawSt:'New Lead';
+    const budgetMin=parseInt(gv(row,'budgetMin'))||0; const budgetMax=parseInt(gv(row,'budgetMax'))||0;
+    if(!name) return {name,phone,email,propType,source,notes,status,budgetMin,budgetMax,_s:'err',_err:'No name'};
+    if(!phone) return {name,phone,email,propType,source,notes,status,budgetMin,budgetMax,_s:'err',_err:'No phone'};
+    const dup=leads.find(l=>l.phone===phone||(email&&l.email===email&&email!==''));
+    if(dup) return {name,phone,email,propType,source,notes,status,budgetMin,budgetMax,_s:'dup'};
+    return {name,phone,email,propType:PROP_TYPES.includes(propType)?propType:propType||'Apartment',source:SOURCES.includes(source)?source:source||'Other',notes,status,budgetMin,budgetMax,_s:'ok'};
+  });
+  importStep=2; renderMain();
+}
+
+async function confirmImport(){
+  const valid=importPreview.filter(r=>r._s==='ok');
+  let imported=0;
+  for(const r of valid){
+    try{
+      await createLead({name:r.name,phone:r.phone,email:r.email,propType:r.propType,source:r.source,budgetMin:r.budgetMin,budgetMax:r.budgetMax,notes:r.notes,status:r.status});
+      imported++;
+    } catch(e){ console.error('Row failed:',e); }
+  }
+  toast(`${imported} lead${imported!==1?'s':''} imported!`,'success');
+  importStep=3; renderMain();
+}
+
+function downloadTemplate(){
+  const wb=XLSX.utils.book_new();
+  const data=[
+    ['Name','Phone','Email','Property Type','Budget Min','Budget Max','Source','Status','Notes'],
+    ['Amit Verma','+91 99887 76655','amit@example.com','Apartment','6000000','10000000','Website','New Lead','2BHK preferred'],
+    ['Lakshmi Iyer','+91 88776 65544','lakshmi@example.com','Villa','12000000','20000000','Referral','Contacted',''],
+    ['Deepak Joshi','+91 77665 54433','','Plot','2500000','5000000','Cold Call','','South Bangalore'],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[{wch:18},{wch:18},{wch:24},{wch:16},{wch:12},{wch:12},{wch:16},{wch:22},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,ws,'Leads');
+  XLSX.writeFile(wb,'CRM_Import_Template.xlsx');
+}
+</script>
+</body>
+</html>
