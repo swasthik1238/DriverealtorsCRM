@@ -340,10 +340,24 @@ console.log("SUCCESS:", data);
     throw error;
   }
 
-  console.log('Insert success:', data);
-  leads.unshift(dbToLead(data));
-  renderMain();
-  return dbToLead(data);
+  // ✅ FIXED VERSION
+const { data, error } = await db
+  .from('leads')
+  .insert([row]);
+
+console.log("RAW RESPONSE:", { data, error });
+
+if (error) {
+  console.error("FULL ERROR:", error);
+  alert("ERROR: " + JSON.stringify(error));
+  throw error;
+}
+
+// ✅ Reload from DB instead of using `data`
+await loadLeads();
+
+console.log("Insert success");
+return true;
 }
 
 async function updateLead(id, changes){
