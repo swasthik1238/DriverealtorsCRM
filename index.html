@@ -229,10 +229,9 @@ async function getSession(){
   return session;
 }
 
-async function getUserId(){
-  const session = await getSession();
-  // Return user id if logged in, or null — both are safe now
-  return session?.user?.id || null;
+function getUserId(){
+  const user = db.auth.getUser();
+  return user?.data?.user?.id || null;
 }
 
 // ══════════════════════════════════════════════
@@ -317,9 +316,9 @@ async function createLead(lead){
   };
 
   // Only add created_by if we actually have a user (won't fail if null due to our SQL fix)
-  const uid = await getUserId();
-  console.log('Current user id:', uid);
-  if(uid) row.created_by = uid;
+  // const uid = await getUserId();
+  // console.log('Current user id:', uid);
+  // if(uid) row.created_by = uid;
 
   console.log('Inserting row:', row);
 
