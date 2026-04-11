@@ -315,7 +315,7 @@ async function createLead(lead){
     notes:      lead.notes    || '',
   };
 
-  Only add created_by if we actually have a user (won't fail if null due to our SQL fix)
+  // Only add created_by if we actually have a user (won't fail if null due to our SQL fix)
   const uid =  getUserId();
   console.log('Current user id:', uid);
   if(uid) row.created_by = uid;
