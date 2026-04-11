@@ -322,8 +322,19 @@ async function createLead(lead){
 
   console.log('Inserting row:', row);
 
-  const { data, error } = await db.from('leads').insert([row]).select().single();
+const { data, error } = await db
+  .from('leads')
+  .insert([row]);
 
+console.log("RAW RESPONSE:", { data, error });
+
+if(error){
+  console.error("FULL ERROR:", error);
+  alert("ERROR: " + JSON.stringify(error));
+  throw error;
+}
+
+console.log("SUCCESS:", data);
   if(error){
     console.error('Insert error:', error);
     throw error;
