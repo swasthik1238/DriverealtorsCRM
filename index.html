@@ -315,10 +315,10 @@ async function createLead(lead){
     notes:      lead.notes    || '',
   };
 
-  // Only add created_by if we actually have a user (won't fail if null due to our SQL fix)
-  // const uid = await getUserId();
-  // console.log('Current user id:', uid);
-  // if(uid) row.created_by = uid;
+  Only add created_by if we actually have a user (won't fail if null due to our SQL fix)
+  const uid =  getUserId();
+  console.log('Current user id:', uid);
+  if(uid) row.created_by = uid;
 
   console.log('Inserting row:', row);
 
@@ -363,7 +363,7 @@ async function loadContactLogs(leadId){
 }
 
 async function addContactLog(leadId, entry){
-  const uid = await getUserId();
+  const uid =  getUserId();
   const row = { lead_id:leadId, method:entry.method, outcome:entry.outcome, note:entry.note, logged_at:today() };
   if(uid) row.logged_by = uid;
   const { error } = await db.from('contact_logs').insert([row]);
