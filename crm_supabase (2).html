@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RE Lead CRM</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --brand:#185FA5; --brand-light:#E6F1FB;
+    --success-bg:#E8F5E9; --success-text:#1B5E20;
+    --warn-bg:#FFF3E0;    --warn-text:#E65100;
+    --danger-bg:#FFEBEE;  --danger-text:#B71C1C;
+    --border:#e0e0e0; --text:#1a1a1a; --muted:#666; --hint:#999;
+    --radius:8px; --radius-lg:12px;
+  }
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:var(--text);background:#f0f2f5}
+  .app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  .sidebar{background:#fff;border-right:1px solid var(--border);padding:1rem 0;display:flex;flex-direction:column}
+  .sidebar-logo{padding:0 1rem 1rem;font-size:16px;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:.5rem}
+  .nav-item{padding:9px 1rem;font-size:13px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:9px;border-left:2px solid transparent;transition:background .12s}
+  .nav-item.active{color:var(--brand);border-left-color:var(--brand);background:var(--brand-light)}
+  .nav-item:hover:not(.active){background:#f5f5f5}
+  .user-area{margin-top:auto;padding:1rem;border-top:1px solid var(--border);font-size:12px}
+  .main{display:flex;flex-direction:column;overflow:hidden}
+  .topbar{background:#fff;border-bottom:1px solid var(--border);padding:12px 1.5rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .topbar-title{font-size:15px;font-weight:600;flex-shrink:0}
+  .content{padding:1.5rem;flex:1;overflow-y:auto}
+  input,select,textarea{font-size:13px;width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:#fff;color:var(--text);outline:none;transition:border-color .15s}
+  input:focus,select:focus,textarea:focus{border-color:var(--brand)}
+  textarea{resize:vertical;min-height:70px}
+  .form-row{margin-bottom:12px}
+  .form-row label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+  .form-group{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  button{font-size:13px;cursor:pointer;border-radius:var(--radius);padding:8px 16px;border:1px solid var(--border);background:#fff;color:var(--text);transition:background .12s,opacity .12s}
+  button:hover{background:#f5f5f5}
+  button:active{transform:scale(.98)}
+  .btn-primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .btn-primary:hover{opacity:.88;background:var(--brand)}
+  .btn-danger{color:#B71C1C;border-color:#f09595}
+  .btn-danger:hover{background:var(--danger-bg)}
+  .btn-sm{padding:5px 10px;font-size:12px}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1rem}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:500;font-size:12px;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;background:#fafafa}
+  td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr.clickable:hover td{background:#f9f9f9;cursor:pointer}
+  .badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:500;white-space:nowrap;display:inline-block}
+  /* Agent badge — colored pill showing who did something */
+  .agent-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .agent-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .avatar{width:32px;height:32px;border-radius:50%;background:var(--brand-light);color:var(--brand);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+  .metric{background:#f9f9f9;border-radius:var(--radius);padding:1rem;text-align:center;border:1px solid var(--border)}
+  .metric-val{font-size:26px;font-weight:600;line-height:1.2}
+  .metric-lbl{font-size:12px;color:var(--muted);margin-top:4px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.25rem}
+  .section-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:1rem 0 8px}
+  .empty{text-align:center;padding:2.5rem;color:var(--hint);font-size:13px}
+  .log-entry{border-left:3px solid var(--border);padding-left:10px;margin-bottom:12px;padding-top:2px;padding-bottom:2px}
+  .visit-card{background:#f9f9f9;border-radius:var(--radius);padding:10px 12px;margin-bottom:8px}
+  .filter-row{display:flex;gap:8px;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+  .filter-row select{width:auto;font-size:12px;padding:6px 8px}
+  .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1rem}
+  .tab{padding:8px 14px;font-size:13px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab.active-tab{color:var(--brand);border-bottom-color:var(--brand)}
+  .stage-chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid transparent}
+  .stage-chip.active-stage{border-color:var(--brand)}
+  /* login */
+  #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f0f2f5}
+  .login-card{background:#fff;border-radius:var(--radius-lg);border:1px solid var(--border);padding:2rem;width:360px}
+  .login-card h2{font-size:20px;font-weight:600;margin-bottom:6px}
+  .login-card p{font-size:13px;color:var(--muted);margin-bottom:1.5rem}
+  .login-error{color:#B71C1C;font-size:13px;margin-top:8px;display:none}
+  /* profile setup */
+  #profile-screen{min-height:100vh;display:none;align-items:center;justify-content:center;background:#f0f2f5}
+  .profile-card{background:#fff;border-radius:var(--radius-lg);border:1px solid var(--border);padding:2rem;width:380px}
+  .color-swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s}
+  .swatch.selected{border-color:#1a1a1a;transform:scale(1.15)}
+  /* panel */
+  .panel-overlay{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:100;display:flex;align-items:flex-start;justify-content:flex-end}
+  .panel{background:#fff;width:460px;height:100vh;overflow-y:auto;padding:1.25rem;border-left:1px solid var(--border)}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+  /* toast */
+  .toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;display:flex;flex-direction:column;gap:8px;max-width:300px}
+  .toast{background:#1a1a1a;color:#fff;padding:10px 16px;border-radius:var(--radius);font-size:13px;animation:slideIn .2s ease}
+  .toast.success{background:#1B5E20}
+  .toast.error{background:#B71C1C}
+  @keyframes slideIn{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+  /* modal */
+  .modal-wrap{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center}
+  .modal{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;width:380px;border:1px solid var(--border)}
+  /* import */
+  .drop-zone{border:2px dashed var(--border);border-radius:var(--radius-lg);padding:2.5rem 1.5rem;text-align:center;cursor:pointer;transition:background .15s,border-color .15s}
+  .drop-zone:hover,.drop-zone.drag-over{background:var(--brand-light);border-color:var(--brand)}
+  .step-bar{display:flex;align-items:center;margin-bottom:1.5rem}
+  .step{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--hint)}
+  .step.active{color:var(--brand);font-weight:600}
+  .step.done{color:#1B5E20}
+  .step-num{width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
+  .step-line{flex:1;height:1px;background:var(--border);margin:0 8px}
+  .preview-wrap{overflow-x:auto;max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)}
+  .preview-wrap table{min-width:700px}
+  .row-valid td:first-child{border-left:3px solid #639922}
+  .row-dup td:first-child{border-left:3px solid #BA7517}
+  .row-err td:first-child{border-left:3px solid #E24B4A}
+  .import-sum{display:flex;gap:10px;margin-bottom:1rem;flex-wrap:wrap}
+  .import-sum-card{flex:1;min-width:90px;padding:10px;border-radius:var(--radius);text-align:center}
+  .col-map-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .col-map-row label{min-width:130px;font-size:12px;color:var(--muted);flex-shrink:0}
+  .col-map-row select{flex:1;font-size:13px}
+  .spinner{display:inline-block;width:16px;height:16px;border:2px solid #ccc;border-top-color:var(--brand);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* activity timeline in panel */
+  .timeline-item{display:flex;gap:10px;margin-bottom:14px}
+  .timeline-line{display:flex;flex-direction:column;align-items:center}
+  .timeline-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px}
+  .timeline-connector{width:1px;flex:1;background:var(--border);margin-top:4px}
+  .timeline-body{flex:1;padding-bottom:4px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <h2><span style="color:var(--brand)">RE</span>Lead CRM</h2>
+    <p>Sign in to access your leads</p>
+    <div class="form-row"><label>Email</label><input type="email" id="login-email" placeholder="agent@yourteam.com"></div>
+    <div class="form-row"><label>Password</label><input type="password" id="login-password" placeholder="••••••••"></div>
+    <button class="btn-primary" style="width:100%" onclick="doLogin()" id="login-btn">Sign in</button>
+    <div class="login-error" id="login-error"></div>
+    <div style="margin-top:1rem;text-align:center">
+      <span style="font-size:12px;color:var(--muted)">No account? </span>
+      <button class="btn-sm" style="border:none;color:var(--brand);background:none;padding:0" onclick="doSignup()">Create one</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE SETUP (first login) -->
+<div id="profile-screen">
+  <div class="profile-card">
+    <h2 style="font-size:18px;margin-bottom:6px">Set up your profile</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem">This name and colour will appear on every lead and contact you handle.</p>
+    <div class="form-row"><label>Your display name</label><input id="profile-name" placeholder="e.g. Rahul or Agent 1" maxlength="30"></div>
+    <div class="form-row">
+      <label>Your colour</label>
+      <div class="color-swatches" id="color-swatches"></div>
+    </div>
+    <div style="margin-top:1rem;display:flex;align-items:center;gap:10px">
+      <div id="profile-preview" style="padding:3px 10px;border-radius:20px;font-size:13px;font-weight:500"></div>
+      <span style="font-size:12px;color:var(--muted)">preview</span>
+    </div>
+    <button class="btn-primary" style="width:100%;margin-top:1.25rem" onclick="saveProfile()">Save & continue</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app-root" style="display:none">
+  <div class="app">
+    <div class="sidebar">
+      <div class="sidebar-logo"><span style="color:var(--brand)">RE</span>Lead CRM</div>
+      <div class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" onclick="nav('leads')" id="nav-leads">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2 13c0-3 2.686-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Leads <span id="nav-badge" class="badge" style="margin-left:auto;background:var(--brand-light);color:var(--brand)"></span>
+      </div>
+      <div class="nav-item" onclick="nav('pipeline')" id="nav-pipeline">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 8h10M1 13h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Pipeline
+      </div>
+      <div class="nav-item" onclick="nav('newlead')" id="nav-newlead">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v6M5 8h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Add lead
+      </div>
+      <div class="nav-item" onclick="nav('import')" id="nav-import">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Import Excel
+      </div>
+      <div class="user-area" id="user-area"></div>
+    </div>
+    <div class="main" id="main-content"></div>
+  </div>
+</div>
+
+<div id="panel-mount"></div>
+<div id="modal-mount"></div>
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ══ CONFIG ══
+const SUPABASE_URL      = 'https://rlifgclubekrvrskpmzq.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsaWZnY2x1YmVrcnZyc2twbXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyMzI0OTgsImV4cCI6MjA5MTgwODQ5OH0.j2RLPybZ1aVJD3Mu34NmHeHfG9Ebcuv8eAwtgYB5SEs';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ══ CONSTANTS ══
+const STAGES=['New Lead','Contacted','Prospect','Site Visit Scheduled','Site Visit Completed','Disqualified','Closed Won','Closed Lost'];
+const STAGE_COLORS={'New Lead':['#E6F1FB','#185FA5'],'Contacted':['#EDE7F6','#4527A0'],'Prospect':['#E8F5E9','#1B5E20'],'Site Visit Scheduled':['#FFF3E0','#E65100'],'Site Visit Completed':['#F3E5F5','#6A1B9A'],'Disqualified':['#FFEBEE','#B71C1C'],'Closed Won':['#E8F5E9','#1B5E20'],'Closed Lost':['#ECEFF1','#455A64']};
+const SOURCES=['Website','Referral','Walk-in','Social Media','Property Portal','Cold Call','Event','Other'];
+const PROP_TYPES=['Apartment','Villa','Plot','Row-house','Penthouse'];
+const DQ_REASONS=['Budget Mismatch','Timeline Too Far','Not Interested','Unreachable','Chose Competitor','Duplicate Record','Other'];
+const CRM_FIELDS=[{key:'name',label:'Name',required:true},{key:'phone',label:'Phone',required:true},{key:'email',label:'Email',required:false},{key:'propType',label:'Property Type',required:false},{key:'budgetMin',label:'Budget Min',required:false},{key:'budgetMax',label:'Budget Max',required:false},{key:'source',label:'Source',required:false},{key:'status',label:'Status',required:false},{key:'notes',label:'Notes',required:false}];
+const AGENT_COLORS=['#185FA5','#1B5E20','#6A1B9A','#E65100','#B71C1C','#0F6E56','#795548','#00838F'];
+
+// ══ STATE ══
+let leads=[], profiles={}, currentView='dashboard';
+let selectedLead=null, panelTab='info', panelLogs=[], panelVisits=[];
+let filterStatus='', filterSource='', filterAgent='', searchQ='';
+let importStep=0, importHeaders=[], importRawRows=[], importColMap={}, importPreview=[];
+let selectedColor=AGENT_COLORS[0];
+
+// ══ HELPERS ══
+function fmt(n){if(!n)return '—';return '₹'+Math.round(n/100000)+'L';}
+function initials(n){return n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();}
+function today(){return new Date().toISOString().slice(0,10);}
+function daysSince(d){if(!d)return null;return Math.round((Date.now()-new Date(d))/86400000);}
+function stageBadge(s){const[bg,tc]=STAGE_COLORS[s]||['#eee','#333'];return`<span class="badge" style="background:${bg};color:${tc}">${s}</span>`;}
+
+// Agent badge — coloured pill with dot showing agent name
+function agentBadge(name, color){
+  if(!name) return '';
+  const bg=color+'22'; // 13% opacity background from hex colour
+  return `<span class="agent-badge" style="background:${bg};color:${color}"><span class="agent-dot" style="background:${color}"></span>${name}</span>`;
+}
+
+function toast(msg,type=''){
+  const c=document.getElementById('toasts');
+  const d=document.createElement('div');
+  d.className='toast'+(type?' '+type:'');d.textContent=msg;c.appendChild(d);
+  setTimeout(()=>d.remove(),3500);
+}
+
+async function getSession(){const{data:{session}}=await db.auth.getSession();return session;}
+async function getUserId(){const s=await getSession();return s?.user?.id||null;}
+
+// Get current user's profile (name + color)
+async function getMyProfile(){
+  const s=await getSession();
+  if(!s?.user?.id) return null;
+  return profiles[s.user.id]||null;
+}
+
+// ══ PROFILE SETUP UI ══
+function initProfileScreen(){
+  const sw=document.getElementById('color-swatches');
+  sw.innerHTML=AGENT_COLORS.map(c=>`<div class="swatch ${c===selectedColor?'selected':''}" style="background:${c}" onclick="selectColor('${c}')" title="${c}"></div>`).join('');
+  updateProfilePreview();
+}
+
+function selectColor(c){
+  selectedColor=c;
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.toggle('selected',s.style.background===c||s.title===c));
+  updateProfilePreview();
+}
+
+function updateProfilePreview(){
+  const name=document.getElementById('profile-name')?.value||'Agent';
+  const el=document.getElementById('profile-preview');
+  if(el){el.style.background=selectedColor+'22';el.style.color=selectedColor;el.textContent=name||'Agent';}
+}
+
+async function saveProfile(){
+  const name=document.getElementById('profile-name').value.trim();
+  if(!name){toast('Please enter a display name.','error');return;}
+  const uid=await getUserId();
+  if(!uid){toast('Not logged in.','error');return;}
+  const{error}=await db.from('profiles').upsert({id:uid,display_name:name,color:selectedColor},{onConflict:'id'});
+  if(error){toast('Error saving profile: '+error.message,'error');return;}
+  profiles[uid]={id:uid,display_name:name,color:selectedColor};
+  document.getElementById('profile-screen').style.display='none';
+  document.getElementById('app-root').style.display='block';
+  updateUserArea();
+  await loadLeads();
+  subscribeRealtime();
+  nav('dashboard');
+}
+
+// ══ AUTH ══
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  const btn=document.getElementById('login-btn');
+  const err=document.getElementById('login-error');
+  btn.textContent='Signing in…';btn.disabled=true;err.style.display='none';
+  const{error}=await db.auth.signInWithPassword({email,password:pass});
+  if(error){err.textContent=error.message;err.style.display='block';btn.textContent='Sign in';btn.disabled=false;}
+}
+
+async function doSignup(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  if(!email||!pass){document.getElementById('login-error').textContent='Enter email and password first.';document.getElementById('login-error').style.display='block';return;}
+  const{error}=await db.auth.signUp({email,password:pass});
+  if(error){document.getElementById('login-error').textContent=error.message;document.getElementById('login-error').style.display='block';}
+  else{document.getElementById('login-error').style.display='none';toast('Account created! Sign in now.','success');}
+}
+
+async function doLogout(){
+  await db.auth.signOut();leads=[];profiles={};
+  document.getElementById('app-root').style.display='none';
+  document.getElementById('profile-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+}
+
+db.auth.onAuthStateChange(async(event,session)=>{
+  console.log('Auth:',event,session?.user?.email);
+  if(session?.user){
+    document.getElementById('login-screen').style.display='none';
+    // Load all profiles first
+    await loadAllProfiles();
+    const myProfile=profiles[session.user.id];
+    if(!myProfile||!myProfile.display_name||myProfile.display_name==='Agent'){
+      // First time — show profile setup
+      document.getElementById('profile-screen').style.display='flex';
+      initProfileScreen();
+    } else {
+      document.getElementById('app-root').style.display='block';
+      updateUserArea();
+      await loadLeads();
+      subscribeRealtime();
+      nav('dashboard');
+    }
+  } else if(event==='SIGNED_OUT'){
+    document.getElementById('app-root').style.display='none';
+    document.getElementById('profile-screen').style.display='none';
+    document.getElementById('login-screen').style.display='flex';
+  }
+});
+
+async function loadAllProfiles(){
+  const{data}=await db.from('profiles').select('*');
+  (data||[]).forEach(p=>profiles[p.id]=p);
+}
+
+function updateUserArea(){
+  const s=Object.values(profiles).find(p=>true); // will be overridden below
+  const el=document.getElementById('user-area');
+  if(!el) return;
+  // Find current user's profile
+  db.auth.getSession().then(({data:{session}})=>{
+    const me=session?.user?.id?profiles[session.user.id]:null;
+    el.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        ${me?`<div style="width:28px;height:28px;border-radius:50%;background:${me.color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${me.display_name[0].toUpperCase()}</div>`:''}
+        <div>
+          <div style="font-weight:500;color:var(--text);font-size:12px">${me?me.display_name:'Agent'}</div>
+          <div style="font-size:11px;color:var(--muted)">${session?.user?.email||''}</div>
+        </div>
+      </div>
+      <button class="btn-sm" onclick="openProfileModal()" style="width:100%;margin-bottom:6px">Edit profile</button>
+      <button class="btn-sm" onclick="doLogout()" style="width:100%">Sign out</button>`;
+  });
+}
+
+function openProfileModal(){
+  db.auth.getSession().then(({data:{session}})=>{
+    const me=session?.user?.id?profiles[session.user.id]:null;
+    if(me){selectedColor=me.color||AGENT_COLORS[0];}
+    document.getElementById('modal-mount').innerHTML=`<div class="modal-wrap" onclick="if(event.target.classList.contains('modal-wrap'))closeModal()"><div class="modal">
+      <div style="font-weight:600;font-size:15px;margin-bottom:1rem">Edit your profile</div>
+      <div class="form-row"><label>Display name</label><input id="modal-profile-name" value="${me?.display_name||''}" oninput="updateModalPreview()" maxlength="30"></div>
+      <div class="form-row"><label>Your colour</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">${AGENT_COLORS.map(c=>`<div class="swatch ${c===selectedColor?'selected':''}" style="background:${c}" onclick="selectModalColor('${c}')" title="${c}"></div>`).join('')}</div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+        <div id="modal-profile-preview" style="padding:3px 10px;border-radius:20px;font-size:13px;font-weight:500;background:${selectedColor}22;color:${selectedColor}">${me?.display_name||'Agent'}</div>
+        <span style="font-size:12px;color:var(--muted)">preview</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:1.25rem">
+        <button class="btn-primary" onclick="saveModalProfile()">Save</button>
+        <button onclick="closeModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  });
+}
+
+function selectModalColor(c){
+  selectedColor=c;
+  document.querySelectorAll('.modal .swatch').forEach(s=>s.classList.toggle('selected',s.title===c));
+  updateModalPreview();
+}
+
+function updateModalPreview(){
+  const name=document.getElementById('modal-profile-name')?.value||'Agent';
+  const el=document.getElementById('modal-profile-preview');
+  if(el){el.style.background=selectedColor+'22';el.style.color=selectedColor;el.textContent=name;}
+}
+
+async function saveModalProfile(){
+  const name=document.getElementById('modal-profile-name').value.trim();
+  if(!name){toast('Enter a name.','error');return;}
+  const uid=await getUserId();
+  const{error}=await db.from('profiles').upsert({id:uid,display_name:name,color:selectedColor},{onConflict:'id'});
+  if(error){toast('Error: '+error.message,'error');return;}
+  profiles[uid]={...profiles[uid],display_name:name,color:selectedColor};
+  closeModal();updateUserArea();renderMain();
+  toast('Profile updated','success');
+}
+
+// ══ DATA LAYER ══
+function dbToLead(r){
+  return{id:r.id,name:r.name,phone:r.phone,email:r.email||'',propType:r.prop_type||'Apartment',budgetMin:r.budget_min||0,budgetMax:r.budget_max||0,source:r.source||'Other',status:r.status||'New Lead',notes:r.notes||'',dqReason:r.dq_reason||'',lastContacted:r.last_contacted||'',created:(r.created_at||'').slice(0,10),createdBy:r.created_by||null,createdByName:r.created_by_name||''};
+}
+
+async function loadLeads(){
+  const{data,error}=await db.from('leads').select('*').order('created_at',{ascending:false});
+  if(error){toast('Error loading leads: '+error.message,'error');return;}
+  leads=(data||[]).map(dbToLead);
+  renderMain();
+}
+
+async function createLead(lead){
+  const uid=await getUserId();
+  const me=uid?profiles[uid]:null;
+  const row={name:lead.name,phone:lead.phone,email:lead.email||null,prop_type:lead.propType||'Apartment',budget_min:lead.budgetMin||0,budget_max:lead.budgetMax||0,source:lead.source||'Other',status:lead.status||'New Lead',notes:lead.notes||''};
+  if(uid) row.created_by=uid;
+  if(me) row.created_by_name=me.display_name;
+  const{data,error}=await db.from('leads').insert([row]).select().single();
+  if(error){console.error('Insert error:',error);throw error;}
+  const newLead=dbToLead(data);
+  leads.unshift(newLead);
+  renderMain();
+  return newLead;
+}
+
+async function updateLead(id,changes){
+  const dbC={};
+  if(changes.name!==undefined)dbC.name=changes.name;
+  if(changes.phone!==undefined)dbC.phone=changes.phone;
+  if(changes.email!==undefined)dbC.email=changes.email;
+  if(changes.propType!==undefined)dbC.prop_type=changes.propType;
+  if(changes.budgetMin!==undefined)dbC.budget_min=changes.budgetMin;
+  if(changes.budgetMax!==undefined)dbC.budget_max=changes.budgetMax;
+  if(changes.source!==undefined)dbC.source=changes.source;
+  if(changes.status!==undefined)dbC.status=changes.status;
+  if(changes.notes!==undefined)dbC.notes=changes.notes;
+  if(changes.dqReason!==undefined)dbC.dq_reason=changes.dqReason;
+  if(changes.lastContacted!==undefined)dbC.last_contacted=changes.lastContacted;
+  const{error}=await db.from('leads').update(dbC).eq('id',id);
+  if(error)throw error;
+  const idx=leads.findIndex(l=>l.id===id);
+  if(idx>-1)leads[idx]={...leads[idx],...changes};
+  if(selectedLead?.id===id)selectedLead={...selectedLead,...changes};
+}
+
+async function loadContactLogs(leadId){
+  const{data}=await db.from('contact_logs').select('*').eq('lead_id',leadId).order('created_at',{ascending:false});
+  return(data||[]).map(r=>({id:r.id,date:r.logged_at,method:r.method,outcome:r.outcome,note:r.note||'',loggedById:r.logged_by||null,loggedByName:r.logged_by_name||''}));
+}
+
+async function addContactLog(leadId,entry){
+  const uid=await getUserId();
+  const me=uid?profiles[uid]:null;
+  const row={lead_id:leadId,method:entry.method,outcome:entry.outcome,note:entry.note,logged_at:today()};
+  if(uid)row.logged_by=uid;
+  if(me)row.logged_by_name=me.display_name;
+  const{error}=await db.from('contact_logs').insert([row]);
+  if(error)throw error;
+  await updateLead(leadId,{lastContacted:today()});
+}
+
+async function loadVisits(leadId){
+  const{data}=await db.from('site_visits').select('*').eq('lead_id',leadId).order('visit_date');
+  return(data||[]).map(r=>({id:r.id,addr:r.address,date:r.visit_date,time:r.visit_time,type:r.visit_type,status:r.status,note:r.note||'',createdByName:r.created_by_name||''}));
+}
+
+async function addVisit(leadId,visit){
+  const uid=await getUserId();
+  const me=uid?profiles[uid]:null;
+  const row={lead_id:leadId,address:visit.addr,visit_date:visit.date,visit_time:visit.time,visit_type:visit.type,status:'Scheduled'};
+  if(uid)row.created_by=uid;
+  if(me)row.created_by_name=me.display_name;
+  const{error}=await db.from('site_visits').insert([row]);
+  if(error)throw error;
+}
+
+async function updateVisit(visitId,changes){
+  const{error}=await db.from('site_visits').update(changes).eq('id',visitId);
+  if(error)throw error;
+}
+
+// Get unique agent names from leads + logs for filter dropdown
+function getAgentNames(){
+  const names=new Set();
+  leads.forEach(l=>{if(l.createdByName)names.add(l.createdByName);});
+  return Array.from(names).sort();
+}
+
+// Get profile color by display name (for badges)
+function colorForName(name){
+  const p=Object.values(profiles).find(p=>p.display_name===name);
+  return p?p.color:'#888';
+}
+
+function subscribeRealtime(){
+  db.channel('crm-changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'leads'},async payload=>{
+      await loadAllProfiles();
+      if(payload.eventType==='INSERT')leads.unshift(dbToLead(payload.new));
+      else if(payload.eventType==='UPDATE'){const i=leads.findIndex(l=>l.id===payload.new.id);if(i>-1)leads[i]=dbToLead(payload.new);if(selectedLead?.id===payload.new.id)selectedLead=dbToLead(payload.new);}
+      else if(payload.eventType==='DELETE')leads=leads.filter(l=>l.id!==payload.old.id);
+      renderMain();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},async()=>{
+      await loadAllProfiles();updateUserArea();renderMain();
+    })
+    .subscribe();
+}
+
+// ══ NAVIGATION ══
+function nav(view){
+  currentView=view;closePanel();closeModal();
+  if(view==='import'){importStep=0;importHeaders=[];importRawRows=[];importColMap={};importPreview=[];}
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('nav-'+view);if(el)el.classList.add('active');
+  renderMain();
+}
+
+function renderMain(){
+  const main=document.getElementById('main-content');if(!main)return;
+  const active=leads.filter(l=>!['Disqualified','Closed Won','Closed Lost'].includes(l.status)).length;
+  const badge=document.getElementById('nav-badge');if(badge)badge.textContent=active||'';
+  if(currentView==='dashboard')main.innerHTML=renderDashboard();
+  else if(currentView==='leads')main.innerHTML=renderLeads();
+  else if(currentView==='pipeline')main.innerHTML=renderPipeline();
+  else if(currentView==='newlead')main.innerHTML=renderNewLeadForm();
+  else if(currentView==='import')main.innerHTML=renderImport();
+  if(currentView==='import')bindImportEvents();
+}
+
+// ══ DASHBOARD ══
+function renderDashboard(){
+  const counts={};STAGES.forEach(s=>counts[s]=leads.filter(l=>l.status===s).length);
+  const overdue=leads.filter(l=>{const d=daysSince(l.lastContacted);return d!==null&&d>7&&!['Disqualified','Closed Won','Closed Lost'].includes(l.status);});
+  const agentNames=getAgentNames();
+  // Per-agent stats
+  const agentStats=agentNames.map(name=>{
+    const color=colorForName(name);
+    const added=leads.filter(l=>l.createdByName===name).length;
+    const active=leads.filter(l=>l.createdByName===name&&!['Disqualified','Closed Won','Closed Lost'].includes(l.status)).length;
+    const won=leads.filter(l=>l.createdByName===name&&l.status==='Closed Won').length;
+    return`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;flex-shrink:0">${name[0].toUpperCase()}</div>
+      <div style="flex:1"><div style="font-weight:500;font-size:13px">${name}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${added} leads added · ${active} active</div></div>
+      <div style="text-align:right"><div style="font-size:18px;font-weight:600;color:#1B5E20">${won}</div><div style="font-size:11px;color:var(--muted)">won</div></div>
+    </div>`;
+  }).join('');
+  const pipeline=['New Lead','Contacted','Prospect','Site Visit Scheduled','Site Visit Completed'].map(s=>{
+    const[bg,tc]=STAGE_COLORS[s];
+    return`<div style="flex:1;text-align:center;padding:10px 4px;background:${bg};border-radius:var(--radius)"><div style="font-size:22px;font-weight:600;color:${tc}">${counts[s]}</div><div style="font-size:11px;color:${tc};margin-top:2px">${s}</div></div>`;
+  }).join('');
+  return`<div class="topbar"><span class="topbar-title">Dashboard</span><span style="font-size:12px;color:var(--muted)">${new Date().toLocaleDateString('en-IN',{weekday:'short',year:'numeric',month:'short',day:'numeric'})}</span></div>
+  <div class="content">
+    <div class="grid4">
+      <div class="metric"><div class="metric-val">${leads.length}</div><div class="metric-lbl">Total leads</div></div>
+      <div class="metric"><div class="metric-val">${leads.filter(l=>!['Disqualified','Closed Won','Closed Lost'].includes(l.status)).length}</div><div class="metric-lbl">Active</div></div>
+      <div class="metric"><div class="metric-val" style="color:#1B5E20">${counts['Closed Won']}</div><div class="metric-lbl">Closed won</div></div>
+      <div class="metric"><div class="metric-val" style="color:#B71C1C">${overdue.length}</div><div class="metric-lbl">Overdue</div></div>
+    </div>
+    <div class="card"><div class="section-label" style="margin-top:0">Active pipeline</div><div style="display:flex;gap:8px">${pipeline}</div></div>
+    ${agentNames.length?`<div class="card"><div class="section-label" style="margin-top:0">Agent performance</div>${agentStats}</div>`:''}
+    ${overdue.length?`<div class="card"><div class="section-label" style="margin-top:0;color:#B71C1C">Overdue follow-ups</div>${overdue.map(l=>`<div class="visit-card" style="cursor:pointer;border-left:3px solid ${colorForName(l.createdByName)||'#ccc'};border-radius:0" onclick="openLead('${l.id}')"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-weight:500">${l.name}</span>${l.createdByName?agentBadge(l.createdByName,colorForName(l.createdByName)):''}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Last contact ${daysSince(l.lastContacted)} days ago</div></div>`).join('')}</div>`:''}
+  </div>`;
+}
+
+// ══ LEADS LIST ══
+function renderLeads(){
+  const agentNames=getAgentNames();
+  let filtered=leads.filter(l=>{
+    if(filterStatus&&l.status!==filterStatus)return false;
+    if(filterSource&&l.source!==filterSource)return false;
+    if(filterAgent&&l.createdByName!==filterAgent)return false;
+    if(searchQ){const q=searchQ.toLowerCase();if(!l.name.toLowerCase().includes(q)&&!l.phone.includes(q)&&!(l.email||'').toLowerCase().includes(q))return false;}
+    return true;
+  });
+  const rows=filtered.length?filtered.map(l=>{
+    const ds=daysSince(l.lastContacted);const dot=ds===null?'#aaa':ds<=3?'#639922':ds<=7?'#BA7517':'#E24B4A';
+    const agColor=colorForName(l.createdByName);
+    return`<tr class="clickable" onclick="openLead('${l.id}')">
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div style="width:32px;height:32px;border-radius:50%;background:${agColor||'var(--brand-light)'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:${agColor?'#fff':'var(--brand)'};">${initials(l.name)}</div>
+        <div><div style="font-weight:500">${l.name}</div><div style="font-size:11px;color:var(--muted)">${l.phone}</div></div>
+      </div></td>
+      <td>${l.propType||'—'}<br><span style="font-size:11px;color:var(--muted)">${fmt(l.budgetMin)}–${fmt(l.budgetMax)}</span></td>
+      <td>${l.source||'—'}</td>
+      <td>${stageBadge(l.status)}</td>
+      <td>${l.createdByName?agentBadge(l.createdByName,agColor):'—'}</td>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};margin-right:4px"></span>${ds!==null?ds+'d ago':'—'}</td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="6" class="empty">No leads match your filters.</td></tr>`;
+
+  const agentFilterOpts=agentNames.map(n=>`<option value="${n}" ${filterAgent===n?'selected':''}>${n}</option>`).join('');
+
+  return`<div class="topbar"><span class="topbar-title">Leads</span><input placeholder="Search name, phone, email…" value="${searchQ}" oninput="searchQ=this.value;renderMain()" style="max-width:200px"><div style="margin-left:auto;display:flex;gap:8px"><button onclick="nav('import')">Import Excel</button><button class="btn-primary" onclick="nav('newlead')">+ Add lead</button></div></div>
+  <div class="content">
+    <div class="filter-row">
+      <select onchange="filterStatus=this.value;renderMain()"><option value="">All statuses</option>${STAGES.map(s=>`<option value="${s}" ${filterStatus===s?'selected':''}>${s}</option>`).join('')}</select>
+      <select onchange="filterSource=this.value;renderMain()"><option value="">All sources</option>${SOURCES.map(s=>`<option value="${s}" ${filterSource===s?'selected':''}>${s}</option>`).join('')}</select>
+      ${agentNames.length>1?`<select onchange="filterAgent=this.value;renderMain()"><option value="">All agents</option>${agentFilterOpts}</select>`:''}
+      ${(filterStatus||filterSource||filterAgent||searchQ)?`<button class="btn-sm" onclick="filterStatus='';filterSource='';filterAgent='';searchQ='';renderMain()">Clear</button>`:''}
+      <span style="margin-left:auto;font-size:12px;color:var(--muted)">${filtered.length} lead${filtered.length!==1?'s':''}</span>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th>Lead</th><th>Interest</th><th>Source</th><th>Status</th><th>Added by</th><th>Last contact</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>
+  </div>`;
+}
+
+// ══ PIPELINE ══
+function renderPipeline(){
+  const active=STAGES.filter(s=>!['Disqualified','Closed Won','Closed Lost'].includes(s));
+  const cols=active.map(s=>{
+    const[bg,tc]=STAGE_COLORS[s];const sl=leads.filter(l=>l.status===s);
+    const cards=sl.map(l=>{
+      const agColor=colorForName(l.createdByName);
+      return`<div style="background:#fff;border:1px solid var(--border);border-left:3px solid ${agColor||'var(--border)'};border-radius:var(--radius);padding:10px;margin-bottom:6px;cursor:pointer" onclick="openLead('${l.id}')">
+        <div style="font-weight:500;font-size:13px">${l.name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${l.propType} ${l.budgetMin?'· '+fmt(l.budgetMin)+'–'+fmt(l.budgetMax):''}</div>
+        ${l.createdByName?`<div style="margin-top:5px">${agentBadge(l.createdByName,agColor)}</div>`:''}
+      </div>`;
+    }).join('');
+    return`<div style="min-width:180px;flex:1"><div style="background:${bg};color:${tc};padding:6px 10px;border-radius:var(--radius);margin-bottom:8px;font-size:12px;font-weight:500;display:flex;justify-content:space-between"><span>${s}</span><span>${sl.length}</span></div>${cards||`<div style="font-size:11px;color:var(--hint);padding:8px 4px">Empty</div>`}</div>`;
+  }).join('');
+  return`<div class="topbar"><span class="topbar-title">Pipeline</span></div><div class="content"><div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:1rem">${cols}</div></div>`;
+}
+
+// ══ NEW LEAD FORM ══
+function renderNewLeadForm(){
+  return`<div class="topbar"><span class="topbar-title">Add new lead</span></div>
+  <div class="content"><div class="card">
+    <div class="form-group"><div class="form-row"><label>Full name *</label><input id="f-name" placeholder="Priya Sharma"></div><div class="form-row"><label>Phone *</label><input id="f-phone" placeholder="+91 98765 43210"></div></div>
+    <div class="form-row"><label>Email</label><input id="f-email" placeholder="priya@email.com"></div>
+    <div class="form-group"><div class="form-row"><label>Property interest</label><select id="f-type">${PROP_TYPES.map(p=>`<option>${p}</option>`).join('')}</select></div><div class="form-row"><label>Source</label><select id="f-source">${SOURCES.map(s=>`<option>${s}</option>`).join('')}</select></div></div>
+    <div class="form-group"><div class="form-row"><label>Budget min (₹)</label><input id="f-bmin" type="number" placeholder="5000000"></div><div class="form-row"><label>Budget max (₹)</label><input id="f-bmax" type="number" placeholder="10000000"></div></div>
+    <div class="form-row"><label>Notes</label><textarea id="f-notes" placeholder="Initial notes…"></textarea></div>
+    <div style="display:flex;gap:8px"><button class="btn-primary" id="save-lead-btn" onclick="saveLead()">Save lead</button><button onclick="nav('leads')">Cancel</button></div>
+  </div></div>`;
+}
+
+async function saveLead(){
+  const name=document.getElementById('f-name').value.trim();
+  const phone=document.getElementById('f-phone').value.trim();
+  if(!name||!phone){toast('Name and phone are required.','error');return;}
+  if(leads.find(l=>l.phone===phone)){toast('Duplicate: phone already exists.','error');return;}
+  const btn=document.getElementById('save-lead-btn');
+  btn.textContent='Saving…';btn.disabled=true;
+  try{
+    await createLead({name,phone,email:document.getElementById('f-email').value.trim(),propType:document.getElementById('f-type').value,source:document.getElementById('f-source').value,budgetMin:parseInt(document.getElementById('f-bmin').value)||0,budgetMax:parseInt(document.getElementById('f-bmax').value)||0,notes:document.getElementById('f-notes').value,status:'New Lead'});
+    toast('Lead saved: '+name,'success');nav('leads');
+  }catch(e){console.error('saveLead:',e);toast('Error: '+e.message,'error');btn.textContent='Save lead';btn.disabled=false;}
+}
+
+// ══ SIDE PANEL ══
+async function openLead(id){
+  selectedLead=leads.find(l=>l.id===id);if(!selectedLead)return;
+  panelTab='info';panelLogs=[];panelVisits=[];
+  renderPanel();
+  panelLogs=await loadContactLogs(id);
+  panelVisits=await loadVisits(id);
+  renderPanel();
+}
+
+function closePanel(){selectedLead=null;document.getElementById('panel-mount').innerHTML='';}
+
+function renderPanel(){
+  if(!selectedLead){document.getElementById('panel-mount').innerHTML='';return;}
+  const l=selectedLead;
+  const ds=daysSince(l.lastContacted);const dot=ds===null?'#aaa':ds<=3?'#639922':ds<=7?'#BA7517':'#E24B4A';
+  const agColor=colorForName(l.createdByName);
+  const tabs=['info','log','visits'].map(t=>`<div class="tab ${panelTab===t?'active-tab':''}" onclick="panelTab='${t}';renderPanel()">${t==='info'?'Lead info':t==='log'?'Contact log':'Site visits'}</div>`).join('');
+  let body='';
+  if(panelTab==='info'){
+    body=`<div class="form-row"><label>Status</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${STAGES.filter(s=>!['Disqualified','Closed Won','Closed Lost'].includes(s)).map(s=>{const[bg,tc]=STAGE_COLORS[s];return`<span class="stage-chip ${l.status===s?'active-stage':''}" style="background:${l.status===s?bg:'transparent'};color:${l.status===s?tc:'var(--muted)'}" onclick="setStatus('${l.id}','${s}')">${s}</span>`;}).join('')}</div></div>
+    <div class="form-row"><label>Name</label><input value="${l.name}" onchange="patchLead('name',this.value)"></div>
+    <div class="form-row"><label>Phone</label><input value="${l.phone}" onchange="patchLead('phone',this.value)"></div>
+    <div class="form-row"><label>Email</label><input value="${l.email||''}" onchange="patchLead('email',this.value)"></div>
+    <div class="form-group"><div class="form-row"><label>Property type</label><select onchange="patchLead('propType',this.value)">${PROP_TYPES.map(p=>`<option ${l.propType===p?'selected':''}>${p}</option>`).join('')}</select></div><div class="form-row"><label>Source</label><select onchange="patchLead('source',this.value)">${SOURCES.map(s=>`<option ${l.source===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
+    <div class="form-group"><div class="form-row"><label>Budget min</label><input type="number" value="${l.budgetMin}" onchange="patchLead('budgetMin',parseInt(this.value))"></div><div class="form-row"><label>Budget max</label><input type="number" value="${l.budgetMax}" onchange="patchLead('budgetMax',parseInt(this.value))"></div></div>
+    <div class="form-row"><label>Notes</label><textarea onchange="patchLead('notes',this.value)">${l.notes||''}</textarea></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      ${!['Disqualified','Closed Won','Closed Lost'].includes(l.status)?`<button class="btn-danger btn-sm" onclick="openDisqModal()">Disqualify</button><button class="btn-sm" onclick="setStatus('${l.id}','Closed Won')">Mark closed won</button>`:''}
+      ${l.status==='Disqualified'?`<button class="btn-sm" onclick="setStatus('${l.id}','New Lead')">Reactivate</button>`:''}
+    </div>`;
+  } else if(panelTab==='log'){
+    // Contact log tab — each entry shows WHO logged it
+    const logItems=panelLogs.length?panelLogs.map(c=>{
+      const lColor=colorForName(c.loggedByName);
+      return`<div class="timeline-item">
+        <div class="timeline-line">
+          <div class="timeline-dot" style="background:${lColor||'var(--border)'}"></div>
+          <div class="timeline-connector"></div>
+        </div>
+        <div class="timeline-body">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-weight:500;font-size:13px">${c.method}</span>
+            <span class="badge" style="background:#f0f0f0;color:var(--muted);font-size:10px">${c.outcome}</span>
+            ${c.loggedByName?agentBadge(c.loggedByName,lColor):''}
+          </div>
+          <div style="font-size:11px;color:var(--hint)">${c.date}</div>
+          ${c.note?`<div style="font-size:13px;margin-top:4px;color:var(--text)">${c.note}</div>`:''}
+        </div>
+      </div>`;
+    }).join(''):`<div class="empty">No contacts logged yet.</div>`;
+
+    body=`<div class="form-row"><label>Contact method</label><select id="log-method"><option>Call</option><option>WhatsApp</option><option>Email</option><option>In-Person</option><option>SMS</option></select></div>
+    <div class="form-row"><label>Outcome</label><select id="log-outcome"><option>Reached</option><option>No Answer</option><option>Left Voicemail</option><option>Call Back Later</option><option>Not Interested</option></select></div>
+    <div class="form-row"><label>Note</label><textarea id="log-note" placeholder="What was discussed…"></textarea></div>
+    <button class="btn-primary btn-sm" onclick="doLogContact()">Log contact</button>
+    <div class="section-label">History (${panelLogs.length})</div>
+    <div>${logItems}</div>`;
+  } else {
+    // Site visits tab — each visit shows WHO scheduled it
+    const visitItems=panelVisits.length?panelVisits.map(v=>{
+      const vColor=colorForName(v.createdByName);
+      return`<div class="visit-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <div style="font-weight:500">${v.addr}</div>
+          ${v.status==='Scheduled'?`<button class="btn-sm btn-primary" onclick="doCompleteVisit('${v.id}')">Mark done</button>`:v.status==='Completed'?`<span class="badge" style="background:var(--success-bg);color:var(--success-text)">Completed</span>`:`<span class="badge" style="background:var(--danger-bg);color:var(--danger-text)">Cancelled</span>`}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span>${v.date} at ${v.time} · ${v.type}</span>
+          ${v.createdByName?agentBadge(v.createdByName,vColor):''}
+        </div>
+        ${v.status==='Scheduled'?`<button class="btn-sm btn-danger" style="margin-top:6px" onclick="doCancelVisit('${v.id}')">Cancel</button>`:''}
+      </div>`;
+    }).join(''):`<div class="empty">No visits scheduled.</div>`;
+
+    body=`<div class="form-row"><label>Property address</label><input id="v-addr" placeholder="Prestige Towers, Whitefield"></div>
+    <div class="form-group"><div class="form-row"><label>Date</label><input type="date" id="v-date" value="${today()}"></div><div class="form-row"><label>Time</label><input type="time" id="v-time" value="10:00"></div></div>
+    <div class="form-row"><label>Visit type</label><select id="v-type"><option>In-person</option><option>Virtual</option></select></div>
+    <button class="btn-primary btn-sm" onclick="doAddVisit()">Schedule visit</button>
+    <div class="section-label">Visits (${panelVisits.length})</div>
+    <div>${visitItems}</div>`;
+  }
+
+  document.getElementById('panel-mount').innerHTML=`<div class="panel-overlay" onclick="if(event.target.classList.contains('panel-overlay'))closePanel()"><div class="panel">
+    <div class="panel-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:50%;background:${agColor||'var(--brand-light)'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:${agColor?'#fff':'var(--brand)'};">${initials(l.name)}</div>
+        <div>
+          <div style="font-weight:600;font-size:15px">${l.name}</div>
+          <div style="font-size:12px;color:var(--muted)">${l.phone}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${dot};display:inline-block" title="${ds!==null?ds+'d since last contact':'Never contacted'}"></span>
+        <button class="btn-sm" onclick="closePanel()">✕</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      ${stageBadge(l.status)}
+      ${l.createdByName?agentBadge(l.createdByName,agColor):''}
+      <span style="font-size:12px;color:var(--hint)">Added ${l.created}</span>
+    </div>
+    <div class="tabs">${tabs}</div>
+    ${body}
+  </div></div>`;
+}
+
+async function patchLead(field,value){if(!selectedLead)return;try{await updateLead(selectedLead.id,{[field]:value});}catch(e){toast('Save error: '+e.message,'error');}}
+async function setStatus(id,status){try{await updateLead(id,{status});toast('Status: '+status,'success');renderMain();renderPanel();}catch(e){toast('Error: '+e.message,'error');}}
+async function doLogContact(){
+  const method=document.getElementById('log-method').value;
+  const outcome=document.getElementById('log-outcome').value;
+  const note=document.getElementById('log-note').value;
+  try{await addContactLog(selectedLead.id,{method,outcome,note});panelLogs=await loadContactLogs(selectedLead.id);toast('Contact logged','success');renderMain();renderPanel();}
+  catch(e){toast('Error: '+e.message,'error');}
+}
+async function doAddVisit(){
+  const addr=document.getElementById('v-addr').value.trim();
+  if(!addr){toast('Enter a property address.','error');return;}
+  const date=document.getElementById('v-date').value;const time=document.getElementById('v-time').value;const type=document.getElementById('v-type').value;
+  try{
+    await addVisit(selectedLead.id,{addr,date,time,type});
+    if(['New Lead','Contacted','Prospect'].includes(selectedLead.status))await updateLead(selectedLead.id,{status:'Site Visit Scheduled'});
+    panelVisits=await loadVisits(selectedLead.id);toast('Visit scheduled','success');renderMain();renderPanel();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function doCompleteVisit(visitId){try{await updateVisit(visitId,{status:'Completed'});await updateLead(selectedLead.id,{status:'Site Visit Completed'});panelVisits=await loadVisits(selectedLead.id);toast('Visit completed','success');renderMain();renderPanel();}catch(e){toast('Error: '+e.message,'error');}}
+async function doCancelVisit(visitId){try{await updateVisit(visitId,{status:'Cancelled'});panelVisits=await loadVisits(selectedLead.id);toast('Visit cancelled');renderPanel();}catch(e){toast('Error: '+e.message,'error');}}
+
+// ══ DISQUALIFY ══
+function openDisqModal(){
+  document.getElementById('modal-mount').innerHTML=`<div class="modal-wrap" onclick="if(event.target.classList.contains('modal-wrap'))closeModal()"><div class="modal">
+    <div style="font-weight:600;font-size:15px;margin-bottom:4px">Disqualify lead</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:1rem">${selectedLead.name} will be removed from the active pipeline.</div>
+    <div class="form-row"><label>Reason *</label><select id="dq-reason">${DQ_REASONS.map(r=>`<option>${r}</option>`).join('')}</select></div>
+    <div class="form-row"><label>Notes</label><textarea id="dq-note" placeholder="Additional context…"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:8px"><button class="btn-danger" onclick="doDisqualify()">Confirm</button><button onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
+}
+function closeModal(){document.getElementById('modal-mount').innerHTML='';}
+async function doDisqualify(){
+  const reason=document.getElementById('dq-reason').value;
+  const note=document.getElementById('dq-note').value;
+  try{
+    await updateLead(selectedLead.id,{status:'Disqualified',dqReason:reason,notes:selectedLead.notes?selectedLead.notes+'\n[DQ: '+reason+'] '+note:'[DQ: '+reason+'] '+note});
+    closeModal();toast('Lead disqualified','success');renderMain();renderPanel();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ══ EXCEL IMPORT ══
+function renderImport(){
+  const steps=['Upload file','Map columns','Preview','Done'];
+  const bar=steps.map((s,i)=>`${i>0?'<div class="step-line"></div>':''}<div class="step ${importStep===i?'active':importStep>i?'done':''}"><div class="step-num">${importStep>i?'✓':i+1}</div><span>${s}</span></div>`).join('');
+  let body='';
+  if(importStep===0){
+    body=`<div class="card"><div class="section-label" style="margin-top:0">Upload your Excel or CSV file</div>
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('xlsx-input').click()">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="margin:0 auto 12px;display:block;color:var(--muted)"><path d="M16 4v16M10 14l6 6 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 22v3a1 1 0 001 1h18a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <div style="font-weight:500;margin-bottom:4px">Drop .xlsx, .xls, or .csv here</div>
+        <div style="font-size:12px;color:var(--hint)">or click to browse</div>
+      </div>
+      <input type="file" id="xlsx-input" accept=".xlsx,.xls,.csv" style="display:none">
+      <div style="margin-top:1rem"><button class="btn-sm" onclick="downloadTemplate()">Download sample template</button></div>
+    </div>`;
+  } else if(importStep===1){
+    const opts=`<option value="">— skip —</option>`+importHeaders.map(h=>`<option value="${h}">${h}</option>`).join('');
+    const rows=CRM_FIELDS.map(f=>{const cur=importColMap[f.key]||'';return`<div class="col-map-row"><label>${f.label}${f.required?' <span style="color:#B71C1C">*</span>':''}</label><select onchange="importColMap['${f.key}']=this.value">${opts.replace(`value="${cur}"`,`value="${cur}" selected`)}</select></div>`;}).join('');
+    body=`<div class="card"><div class="section-label" style="margin-top:0">Map your columns</div><div style="font-size:13px;color:var(--muted);margin-bottom:1rem">File has <strong>${importHeaders.length}</strong> columns · <strong>${importRawRows.length}</strong> rows</div>${rows}<div style="display:flex;gap:8px;margin-top:1rem"><button class="btn-primary" onclick="runPreview()">Preview import</button><button onclick="importStep=0;renderMain()">Back</button></div></div>`;
+  } else if(importStep===2){
+    const valid=importPreview.filter(r=>r._s==='ok');
+    const dups=importPreview.filter(r=>r._s==='dup');
+    const errs=importPreview.filter(r=>r._s==='err');
+    const rows=importPreview.map((r,i)=>`<tr class="${r._s==='ok'?'row-valid':r._s==='dup'?'row-dup':'row-err'}"><td>${i+1}</td><td>${r._s==='ok'?'<span style="background:#E8F5E9;color:#1B5E20;padding:2px 7px;border-radius:20px;font-size:11px">Valid</span>':r._s==='dup'?'<span style="background:#FFF3E0;color:#E65100;padding:2px 7px;border-radius:20px;font-size:11px">Duplicate</span>':'<span style="background:#FFEBEE;color:#B71C1C;padding:2px 7px;border-radius:20px;font-size:11px">'+r._err+'</span>'}</td><td>${r.name||'—'}</td><td>${r.phone||'—'}</td><td>${r.propType||'—'}</td><td>${r.source||'—'}</td><td>${r.status||'New Lead'}</td></tr>`).join('');
+    body=`<div class="card"><div class="section-label" style="margin-top:0">Preview & confirm</div>
+      <div class="import-sum">
+        <div class="import-sum-card" style="background:#E8F5E9"><div style="font-size:20px;font-weight:600;color:#1B5E20">${valid.length}</div><div style="font-size:12px;color:#3B6D11">Ready</div></div>
+        <div class="import-sum-card" style="background:#FFF3E0"><div style="font-size:20px;font-weight:600;color:#E65100">${dups.length}</div><div style="font-size:12px;color:#854F0B">Duplicates</div></div>
+        <div class="import-sum-card" style="background:#FFEBEE"><div style="font-size:20px;font-weight:600;color:#B71C1C">${errs.length}</div><div style="font-size:12px;color:#791F1F">Errors</div></div>
+        <div class="import-sum-card" style="background:#f9f9f9"><div style="font-size:20px;font-weight:600">${importPreview.length}</div><div style="font-size:12px;color:var(--muted)">Total</div></div>
+      </div>
+      <div class="preview-wrap"><table><thead><tr><th>#</th><th>Result</th><th>Name</th><th>Phone</th><th>Prop type</th><th>Source</th><th>Stage</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="display:flex;gap:8px;margin-top:1rem;align-items:center">
+        ${valid.length?`<button class="btn-primary" id="confirm-import-btn" onclick="confirmImport()">Import ${valid.length} lead${valid.length!==1?'s':''}</button>`:`<button class="btn-primary" disabled>No valid rows</button>`}
+        <button onclick="importStep=1;renderMain()">Back</button>
+        ${dups.length?`<span style="font-size:12px;color:var(--hint)">${dups.length} skipped</span>`:''}
+      </div>
+    </div>`;
+  } else {
+    body=`<div class="card" style="text-align:center;padding:2.5rem 1.25rem">
+      <div style="width:52px;height:52px;border-radius:50%;background:#E8F5E9;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:24px;color:#1B5E20">✓</div>
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px">Import complete!</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:1.5rem">Your leads are now live in the CRM.</div>
+      <div style="display:flex;gap:8px;justify-content:center"><button class="btn-primary" onclick="nav('leads')">View leads</button><button onclick="nav('import')">Import another</button></div>
+    </div>`;
+  }
+  return`<div class="topbar"><span class="topbar-title">Import from Excel</span></div><div class="content"><div class="step-bar">${bar}</div>${body}</div>`;
+}
+
+function bindImportEvents(){
+  const inp=document.getElementById('xlsx-input');const dz=document.getElementById('drop-zone');
+  if(!inp||!dz)return;
+  inp.onchange=e=>handleFile(e.target.files[0]);
+  dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag-over');};
+  dz.ondragleave=()=>dz.classList.remove('drag-over');
+  dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag-over');handleFile(e.dataTransfer.files[0]);};
+}
+
+function handleFile(file){
+  if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','csv'].includes(ext)){toast('Please upload .xlsx, .xls, or .csv','error');return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const json=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(!json||json.length<2){toast('File is empty.','error');return;}
+      importHeaders=json[0].map(h=>String(h).trim()).filter(h=>h);
+      importRawRows=json.slice(1).filter(r=>r.some(c=>c!==''));
+      importColMap={};
+      CRM_FIELDS.forEach(f=>{
+        const auto=importHeaders.find(h=>{const n=h.toLowerCase().replace(/[^a-z]/g,'');return n===f.key.toLowerCase()||n.includes(f.label.toLowerCase().replace(/[^a-z]/g,''));});
+        if(auto)importColMap[f.key]=auto;
+      });
+      importStep=1;renderMain();
+    }catch(err){toast('Could not read file.','error');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function runPreview(){
+  if(!importColMap['name']||!importColMap['phone']){toast('Please map Name and Phone columns.','error');return;}
+  const hidx={};importHeaders.forEach((h,i)=>hidx[h]=i);
+  const gv=(row,key)=>{const col=importColMap[key];if(!col)return'';const i=hidx[col];return i!==undefined?String(row[i]||'').trim():'';};
+  importPreview=importRawRows.map(row=>{
+    const name=gv(row,'name');const phone=gv(row,'phone');
+    const email=gv(row,'email');const propType=gv(row,'propType');
+    const source=gv(row,'source');const notes=gv(row,'notes');
+    const rawSt=gv(row,'status');const status=STAGES.includes(rawSt)?rawSt:'New Lead';
+    const budgetMin=parseInt(gv(row,'budgetMin'))||0;const budgetMax=parseInt(gv(row,'budgetMax'))||0;
+    if(!name)return{name,phone,email,propType,source,notes,status,budgetMin,budgetMax,_s:'err',_err:'No name'};
+    if(!phone)return{name,phone,email,propType,source,notes,status,budgetMin,budgetMax,_s:'err',_err:'No phone'};
+    const dup=leads.find(l=>l.phone===phone||(email&&l.email===email&&email!==''));
+    if(dup)return{name,phone,email,propType,source,notes,status,budgetMin,budgetMax,_s:'dup'};
+    return{name,phone,email,propType:PROP_TYPES.includes(propType)?propType:propType||'Apartment',source:SOURCES.includes(source)?source:source||'Other',notes,status,budgetMin,budgetMax,_s:'ok'};
+  });
+  importStep=2;renderMain();
+}
+
+async function confirmImport(){
+  const valid=importPreview.filter(r=>r._s==='ok');
+  const btn=document.getElementById('confirm-import-btn');
+  if(btn){btn.textContent='Importing…';btn.disabled=true;}
+  let imported=0;
+  for(const r of valid){
+    try{await createLead({name:r.name,phone:r.phone,email:r.email,propType:r.propType,source:r.source,budgetMin:r.budgetMin,budgetMax:r.budgetMax,notes:r.notes,status:r.status});imported++;}
+    catch(e){console.error('Row failed:',r.name,e.message);}
+  }
+  toast(`${imported} lead${imported!==1?'s':''} imported!`,'success');
+  importStep=3;renderMain();
+}
+
+function downloadTemplate(){
+  const wb=XLSX.utils.book_new();
+  const data=[['Name','Phone','Email','Property Type','Budget Min','Budget Max','Source','Status','Notes'],['Amit Verma','+91 99887 76655','amit@example.com','Apartment','6000000','10000000','Website','New Lead','2BHK preferred'],['Lakshmi Iyer','+91 88776 65544','lakshmi@example.com','Villa','12000000','20000000','Referral','Contacted',''],['Deepak Joshi','+91 77665 54433','','Plot','2500000','5000000','Cold Call','','South Bangalore']];
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[{wch:18},{wch:18},{wch:24},{wch:16},{wch:12},{wch:12},{wch:16},{wch:22},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,ws,'Leads');
+  XLSX.writeFile(wb,'CRM_Import_Template.xlsx');
+}
+</script>
+</body>
+</html>
