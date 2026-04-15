@@ -238,6 +238,39 @@ function toast(msg,type=''){
   setTimeout(()=>d.remove(),3500);
 }
 
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-root').style.display = 'none';
+  document.getElementById('profile-screen').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('profile-screen').style.display = 'none';
+  document.getElementById('app-root').style.display = 'block';
+}
+
+function showProfileSetup() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-root').style.display = 'none';
+  document.getElementById('profile-screen').style.display = 'flex';
+}
+
+function showLoading() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('profile-screen').style.display = 'none';
+  document.getElementById('app-root').style.display = 'none';
+}
+
+function showFatalError(msg) {
+  document.body.innerHTML = "<div style='padding:2rem;color:red'>Error: " + msg + "</div>";
+}
+
+function resetApp() {
+  leads = [];
+  profiles = {};
+}
+ 
 async function getSession(){const{data:{session}}=await db.auth.getSession();return session;}
 async function getUserId(){const s=await getSession();return s?.user?.id||null;}
 
@@ -310,31 +343,64 @@ async function doLogout(){
   document.getElementById('login-screen').style.display='flex';
 }
 
-db.auth.onAuthStateChange(async(event,session)=>{
-  console.log('Auth:',event,session?.user?.email);
-  if(session?.user){
-    document.getElementById('login-screen').style.display='none';
-    // Load all profiles first
-    await loadAllProfiles();
-    const myProfile=profiles[session.user.id];
-    if(!myProfile||!myProfile.display_name||myProfile.display_name==='Agent'){
-      // First time — show profile setup
-      document.getElementById('profile-screen').style.display='flex';
-      initProfileScreen();
-    } else {
-      document.getElementById('app-root').style.display='block';
-      updateUserArea();
-      await loadLeads();
-      subscribeRealtime();
-      nav('dashboard');
-    }
-  } else if(event==='SIGNED_OUT'){
-    document.getElementById('app-root').style.display='none';
-    document.getElementById('profile-screen').style.display='none';
-    document.getElementById('login-screen').style.display='flex';
+// ✅ NEW AUTH HANDLER
+db.auth.onAuthStateChange(async (event, session) => {
+  console.log("Auth event:", event);
+
+  if (event === 'SIGNED_IN' && session) {
+    await handleUserSession(session);
+  }
+
+  if (event === 'SIGNED_OUT') {
+    resetApp();
+    showLogin();
   }
 });
 
+ async function handleUserSession(session) {
+  try {
+    showLoading();
+
+    await loadAllProfiles();
+
+    let myProfile = profiles[session.user.id];
+
+    let retries = 0;
+    while (!myProfile && retries < 5) {
+      console.warn("Profile not ready, retrying...");
+      await new Promise(r => setTimeout(r, 300));
+      await loadAllProfiles();
+      myProfile = profiles[session.user.id];
+      retries++;
+    }
+
+    if (!myProfile) {
+      console.error("Profile not found");
+      showFatalError("Profile failed to load");
+      return;
+    }
+
+    if (!myProfile.display_name || myProfile.display_name === 'Agent') {
+      showProfileSetup();
+      initProfileScreen();
+      return;
+    }
+
+    showApp();
+
+    updateUserArea();
+
+    await loadLeads();
+    subscribeRealtime();
+
+    nav('dashboard');
+
+  } catch (err) {
+    console.error("Session handler crash:", err);
+    showFatalError(err.message);
+  }
+}
+ 
 async function loadAllProfiles(){
   const{data}=await db.from('profiles').select('*');
   (data||[]).forEach(p=>profiles[p.id]=p);
@@ -930,6 +996,23 @@ function downloadTemplate(){
   XLSX.utils.book_append_sheet(wb,ws,'Leads');
   XLSX.writeFile(wb,'CRM_Import_Template.xlsx');
 }
+
+ initApp();
+
+async function initApp() {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+
+    if (session) {
+      await handleUserSession(session);
+    } else {
+      showLogin();
+    }
+  } catch (err) {
+    console.error("Init crash:", err);
+  }
+}
+ 
 </script>
 </body>
 </html>
